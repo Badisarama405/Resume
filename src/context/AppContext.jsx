@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { SAMPLE_CANDIDATES, MOCK_JOBS, calculateAtsMatchScore } from '../data/mockData';
+import { fetchRapidApiJobs, fetchFreePublicLiveJobs } from '../services/jobService';
 
 const AppContext = createContext(null);
 
@@ -203,12 +204,115 @@ export function AppProvider({ children }) {
     }).sort((a, b) => b.matchResult.totalScore - a.matchResult.totalScore);
   };
 
+  // Live Job API & Ingestion state
+  const [rapidApiKey, setRapidApiKeyState] = useState(() => {
+    try {
+      return localStorage.getItem('CAREERPILOT_RAPIDAPI_KEY') || 
+             (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RAPIDAPI_KEY) || 
+             '';
+    } catch (e) {
+      return '';
+    }
+  });
+
+  const setRapidApiKey = (key) => {
+    const clean = (key || '').trim();
+    setRapidApiKeyState(clean);
+    try {
+      if (clean) {
+        localStorage.setItem('CAREERPILOT_RAPIDAPI_KEY', clean);
+      } else {
+        localStorage.removeItem('CAREERPILOT_RAPIDAPI_KEY');
+      }
+    } catch (e) {}
+  };
+
+  const [jobFeedMode, setJobFeedMode] = useState('catalog'); // 'catalog' | 'rapidapi' | 'public_live'
+  const [isFetchingLiveJobs, setIsFetchingLiveJobs] = useState(false);
+  const [liveJobStatusMessage, setLiveJobStatusMessage] = useState('');
+  const [liveJobError, setLiveJobError] = useState('');
+
   // Synchronously initialize jobMatches so no screen renders with an empty list
   const [jobMatches, setJobMatches] = useState(() => computeMatches(candidate));
 
   useEffect(() => {
+    if (jobFeedMode === 'catalog') {
+      setJobMatches(computeMatches(candidate));
+    } else {
+      setJobMatches(prev => prev.map(job => ({
+        ...job,
+        matchResult: calculateAtsMatchScore(candidate, job)
+      })).sort((a, b) => b.matchResult.totalScore - a.matchResult.totalScore));
+    }
+  }, [candidate, jobFeedMode]);
+
+  const fetchLiveJobOpenings = async (customQuery = '') => {
+    setIsFetchingLiveJobs(true);
+    setLiveJobError('');
+    setLiveJobStatusMessage('Connecting to RapidAPI JSearch network...');
+    try {
+      const q = customQuery || (preferences.targetTitles?.[0] ? `${preferences.targetTitles[0]} India` : 'Software Engineer Bangalore');
+      const liveJobs = await fetchRapidApiJobs(rapidApiKey, q, candidate);
+      setJobMatches(liveJobs);
+      setJobFeedMode('rapidapi');
+      setLiveJobStatusMessage(`Successfully ingested ${liveJobs.length} live jobs from LinkedIn/Job Boards.`);
+      
+      setSources(prev => prev.map(s => s.id === 'src-1' ? { ...s, lastSync: 'Just now', jobsToday: s.jobsToday + liveJobs.length } : s));
+      
+      setActivityLogs(prev => [
+        {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          event: 'RapidAPI Live Sync',
+          details: `Ingested ${liveJobs.length} live postings matching "${q}"`
+        },
+        ...prev
+      ]);
+      return { success: true, count: liveJobs.length };
+    } catch (err) {
+      setLiveJobError(err.message || 'Failed to fetch live jobs from RapidAPI.');
+      setLiveJobStatusMessage('');
+      return { success: false, error: err.message };
+    } finally {
+      setIsFetchingLiveJobs(false);
+    }
+  };
+
+  const fetchPublicJobOpenings = async () => {
+    setIsFetchingLiveJobs(true);
+    setLiveJobError('');
+    setLiveJobStatusMessage('Connecting to Free Public Live Remote Tech feed...');
+    try {
+      const liveJobs = await fetchFreePublicLiveJobs(candidate);
+      setJobMatches(liveJobs);
+      setJobFeedMode('public_live');
+      setLiveJobStatusMessage(`Successfully ingested ${liveJobs.length} live developer jobs from public feeds.`);
+      
+      setActivityLogs(prev => [
+        {
+          id: `log-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          event: 'Public Live Feed Sync',
+          details: `Ingested ${liveJobs.length} live remote postings`
+        },
+        ...prev
+      ]);
+      return { success: true, count: liveJobs.length };
+    } catch (err) {
+      setLiveJobError(err.message || 'Failed to load public live feed.');
+      setLiveJobStatusMessage('');
+      return { success: false, error: err.message };
+    } finally {
+      setIsFetchingLiveJobs(false);
+    }
+  };
+
+  const resetToCuratedCatalog = () => {
     setJobMatches(computeMatches(candidate));
-  }, [candidate]);
+    setJobFeedMode('catalog');
+    setLiveJobStatusMessage('Active: Curated Top Indian IT Employers (Razorpay, Swiggy, Flipkart, Cred).');
+    setLiveJobError('');
+  };
 
   // Synchronize hash changes (back/forward navigation)
   useEffect(() => {
@@ -406,7 +510,16 @@ export function AppProvider({ children }) {
         sources,
         setSources,
         jobMatches,
-        loadDemoCandidate
+        loadDemoCandidate,
+        rapidApiKey,
+        setRapidApiKey,
+        jobFeedMode,
+        isFetchingLiveJobs,
+        liveJobStatusMessage,
+        liveJobError,
+        fetchLiveJobOpenings,
+        fetchPublicJobOpenings,
+        resetToCuratedCatalog
       }}
     >
       {children}

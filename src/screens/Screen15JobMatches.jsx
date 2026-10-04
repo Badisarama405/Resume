@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Search, Filter, Bookmark, Zap, MapPin, IndianRupee, 
-  Building2, CheckCircle2, AlertCircle, ArrowRight, Eye, Send, Check 
+  Building2, CheckCircle2, AlertCircle, ArrowRight, Eye, Send, Check,
+  Key, Globe, RefreshCw, Sparkles, ExternalLink, Sliders
 } from 'lucide-react';
 
 export function Screen15JobMatches() {
   const { 
     jobMatches, navigateTo, savedJobIds, toggleSaveJob, 
-    automationSettings, applications 
+    automationSettings, applications,
+    rapidApiKey, setRapidApiKey, jobFeedMode, isFetchingLiveJobs,
+    liveJobStatusMessage, liveJobError, fetchLiveJobOpenings,
+    fetchPublicJobOpenings, resetToCuratedCatalog
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,6 +21,10 @@ export function Screen15JobMatches() {
   const [selectedWorkMode, setSelectedWorkMode] = useState('all');
   const [selectedSource, setSelectedSource] = useState('all');
   const [sortBy, setSortBy] = useState('score'); // 'score' | 'recent' | 'salary'
+
+  const [showApiConfig, setShowApiConfig] = useState(false);
+  const [inputApiKey, setInputApiKey] = useState(rapidApiKey || '');
+  const [customSearchQuery, setCustomSearchQuery] = useState('Software Engineer Bangalore');
 
   const appliedJobIds = applications.map(a => a.jobId);
 
@@ -90,6 +98,147 @@ export function Screen15JobMatches() {
             View Tracked Applications ({applications.length})
           </button>
         </div>
+      </div>
+
+      {/* Live Job API Connection Control Bar */}
+      <div className="glass-card" style={{ 
+        padding: '1.25rem', 
+        marginBottom: '1.5rem', 
+        border: jobFeedMode === 'rapidapi' ? '1px solid #10b981' : jobFeedMode === 'public_live' ? '1px solid #38bdf8' : '1px solid var(--border-subtle)',
+        background: jobFeedMode === 'rapidapi' ? 'rgba(16, 185, 129, 0.05)' : 'rgba(255, 255, 255, 0.02)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {jobFeedMode === 'rapidapi' ? (
+              <span className="badge badge-success" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                LIVE MODE: RapidAPI JSearch Connected ({jobMatches.length} Openings)
+              </span>
+            ) : jobFeedMode === 'public_live' ? (
+              <span className="badge badge-info" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8', display: 'inline-block' }}></span>
+                LIVE MODE: Free Remote Tech Feed ({jobMatches.length} Openings)
+              </span>
+            ) : (
+              <span className="badge badge-indigo" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}>
+                <Building2 size={13} />
+                DEMO MODE: Curated Indian Tech Catalog (Razorpay, Swiggy, Flipkart, Cred)
+              </span>
+            )}
+
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              {isFetchingLiveJobs ? 'Connecting to live API network...' : 'Live deduplicated roles ranked by ATS compatibility'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setShowApiConfig(!showApiConfig)}
+              className="btn btn-outline btn-sm"
+              style={{ fontSize: '0.8rem' }}
+            >
+              <Key size={13} />
+              {showApiConfig ? 'Hide API Settings' : 'Configure RapidAPI Key / Live Search'}
+            </button>
+
+            {jobFeedMode !== 'catalog' && (
+              <button
+                onClick={resetToCuratedCatalog}
+                className="btn btn-outline btn-sm"
+                style={{ fontSize: '0.8rem' }}
+              >
+                <RefreshCw size={12} /> Reset to Catalog
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Status & Error alerts */}
+        {liveJobStatusMessage && (
+          <div style={{ marginTop: '0.75rem', fontSize: '0.84rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <CheckCircle2 size={15} /> {liveJobStatusMessage}
+          </div>
+        )}
+        {liveJobError && (
+          <div style={{ marginTop: '0.75rem', fontSize: '0.84rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <AlertCircle size={15} /> {liveJobError}
+          </div>
+        )}
+
+        {/* Expandable API Key & Live Ingestion Configuration */}
+        {showApiConfig && (
+          <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem', color: '#c7d2fe' }}>
+                  RapidAPI Key (X-RapidAPI-Key)
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Paste your RapidAPI key here..."
+                    value={inputApiKey}
+                    onChange={(e) => setInputApiKey(e.target.value)}
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                  <button
+                    onClick={() => {
+                      setRapidApiKey(inputApiKey);
+                      alert('RapidAPI key saved in your browser storage!');
+                    }}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Save Key
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  Get free key at <a href="https://rapidapi.com/letscrape-6bRBa3qguO5/api/jsearch" target="_blank" rel="noreferrer" style={{ color: '#818cf8' }}>rapidapi.com JSearch</a>. Saved securely in local storage.
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.4rem', color: '#c7d2fe' }}>
+                  Live Search Query
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Software Engineer Bangalore, Python Hyderabad"
+                  value={customSearchQuery}
+                  onChange={(e) => setCustomSearchQuery(e.target.value)}
+                  style={{ fontSize: '0.85rem' }}
+                />
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  Queries real jobs from LinkedIn, Indeed, and verified employer pages.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                disabled={isFetchingLiveJobs || !inputApiKey}
+                onClick={() => {
+                  setRapidApiKey(inputApiKey);
+                  fetchLiveJobOpenings(customSearchQuery);
+                }}
+                className="btn btn-primary btn-sm"
+              >
+                <Zap size={14} style={{ animation: isFetchingLiveJobs ? 'spin 1s linear infinite' : 'none' }} />
+                {isFetchingLiveJobs ? 'Fetching Live Jobs...' : '⚡ Fetch Real Live Jobs (RapidAPI)'}
+              </button>
+
+              <button
+                disabled={isFetchingLiveJobs}
+                onClick={fetchPublicJobOpenings}
+                className="btn btn-outline btn-sm"
+              >
+                <Globe size={14} />
+                🌐 Fetch Free Remote Tech Jobs (No API Key Required)
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search & Multi-Faceted Filters */}
@@ -318,6 +467,17 @@ export function Screen15JobMatches() {
                     >
                       <Zap size={13} /> ATS Deep Analysis (Screen 17)
                     </button>
+                    {job.applyUrl && (
+                      <a 
+                        href={job.applyUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="btn btn-outline btn-sm"
+                        style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#38bdf8' }}
+                      >
+                        <ExternalLink size={12} /> Open Job
+                      </a>
+                    )}
                   </div>
 
                   <div>
