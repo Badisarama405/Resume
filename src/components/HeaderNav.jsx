@@ -84,36 +84,69 @@ export function HeaderNav() {
           </select>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button 
-            onClick={() => navigateTo('screen-28')}
-            className={`badge ${user.plan === 'pro' ? 'badge-success' : 'badge-warning'}`}
-            style={{ cursor: 'pointer' }}
-          >
-            <Crown size={12} /> {user.plan === 'pro' ? 'Pro Member' : 'Free Plan (Upgrade ₹499)'}
-          </button>
-          
-          <button 
-            onClick={() => navigateTo('screen-32')}
-            className="btn btn-outline btn-sm"
-            style={{ padding: '0.2rem 0.5rem', position: 'relative' }}
-            title="Notifications"
-          >
-            <Bell size={13} />
-            <span style={{
-              position: 'absolute',
-              top: '-3px',
-              right: '-3px',
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: '#ef4444'
-            }} />
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          {user.isAuthenticated ? (
+            <>
+              <button 
+                onClick={() => navigateTo('screen-28')}
+                className={`badge ${user.plan === 'pro' ? 'badge-success' : 'badge-warning'}`}
+                style={{ cursor: 'pointer' }}
+              >
+                <Crown size={12} /> {user.plan === 'pro' ? 'Pro Member' : 'Free Plan (Upgrade ₹499)'}
+              </button>
+              
+              <button 
+                onClick={() => navigateTo('screen-32')}
+                className="btn btn-outline btn-sm"
+                style={{ padding: '0.2rem 0.5rem', position: 'relative' }}
+                title="Notifications"
+              >
+                <Bell size={13} />
+                <span style={{
+                  position: 'absolute',
+                  top: '-3px',
+                  right: '-3px',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#ef4444'
+                }} />
+              </button>
 
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-            {candidate?.name || user?.fullName || 'Candidate'}
-          </span>
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {user.fullName || candidate?.name || 'Member'}
+              </span>
+
+              <button 
+                onClick={logoutUser}
+                className="btn btn-outline btn-sm"
+                style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                title="Log Out"
+              >
+                <LogOut size={12} /> Log Out
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="badge" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                <User size={12} /> Guest
+              </span>
+              <button 
+                onClick={() => navigateTo('screen-04')}
+                className="btn btn-outline btn-sm"
+                style={{ padding: '0.25rem 0.7rem', fontSize: '0.8rem' }}
+              >
+                Sign In
+              </button>
+              <button 
+                onClick={() => navigateTo('screen-02')}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '0.25rem 0.8rem', fontSize: '0.8rem' }}
+              >
+                Sign Up
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -156,56 +189,110 @@ export function HeaderNav() {
           </div>
         </div>
 
-        {/* 5 Core Primary Product Navigation Destinations */}
+        {/* Product Navigation Destinations */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button 
-            id="nav-dashboard"
-            onClick={() => navigateTo('screen-14')}
-            className={`btn btn-sm ${currentScreen === 'screen-14' ? 'btn-primary' : 'btn-outline'}`}
-          >
-            <LayoutDashboard size={14} /> Dashboard
-          </button>
+          {user.isAuthenticated ? (
+            <>
+              <button 
+                id="nav-dashboard"
+                onClick={() => navigateTo('screen-14')}
+                className={`btn btn-sm ${currentScreen === 'screen-14' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <LayoutDashboard size={14} /> Dashboard
+              </button>
 
-          <button 
-            id="nav-jobs"
-            onClick={() => navigateTo('screen-15')}
-            className={`btn btn-sm ${currentScreen === 'screen-15' || currentScreen === 'screen-16' || currentScreen === 'screen-17' ? 'btn-primary' : 'btn-outline'}`}
-          >
-            <Briefcase size={14} /> Jobs Feed
-          </button>
+              <button 
+                id="nav-jobs"
+                onClick={() => navigateTo('screen-15')}
+                className={`btn btn-sm ${currentScreen === 'screen-15' || currentScreen === 'screen-16' || currentScreen === 'screen-17' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <Briefcase size={14} /> Jobs Feed
+              </button>
 
-          <button 
-            id="nav-tracker"
-            onClick={() => navigateTo('screen-21')}
-            className={`btn btn-sm ${currentScreen === 'screen-21' || currentScreen === 'screen-22' ? 'btn-primary' : 'btn-outline'}`}
-          >
-            <FileCheck size={14} /> Applications ({applications?.length || 0})
-          </button>
+              <button 
+                id="nav-tracker"
+                onClick={() => navigateTo('screen-21')}
+                className={`btn btn-sm ${currentScreen === 'screen-21' || currentScreen === 'screen-22' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <FileCheck size={14} /> Applications ({applications?.length || 0})
+              </button>
 
-          <button 
-            id="nav-profile"
-            onClick={() => navigateTo('screen-23')}
-            className={`btn btn-sm ${currentScreen === 'screen-23' || currentScreen === 'screen-24' ? 'btn-primary' : 'btn-outline'}`}
-          >
-            <User size={14} /> Profile & Resumes
-          </button>
+              <button 
+                id="nav-profile"
+                onClick={() => navigateTo('screen-23')}
+                className={`btn btn-sm ${currentScreen === 'screen-23' || currentScreen === 'screen-24' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <User size={14} /> Profile & Resumes
+              </button>
 
-          <button 
-            id="nav-settings"
-            onClick={() => navigateTo('screen-26')}
-            className={`btn btn-sm ${currentScreen.startsWith('screen-2') && !['screen-21', 'screen-22', 'screen-23', 'screen-24'].includes(currentScreen) ? 'btn-primary' : 'btn-outline'}`}
-          >
-            <Settings size={14} /> Settings
-          </button>
+              <button 
+                id="nav-settings"
+                onClick={() => navigateTo('screen-26')}
+                className={`btn btn-sm ${currentScreen.startsWith('screen-2') && !['screen-21', 'screen-22', 'screen-23', 'screen-24'].includes(currentScreen) ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <Settings size={14} /> Settings
+              </button>
 
-          <button 
-            id="nav-sources"
-            onClick={() => navigateTo('screen-30')}
-            className={`btn btn-sm ${currentScreen === 'screen-30' ? 'btn-primary' : 'btn-outline'}`}
-            title="Job Source Feeds Status"
-          >
-            <Database size={14} /> Sources
-          </button>
+              <button 
+                id="nav-sources"
+                onClick={() => navigateTo('screen-30')}
+                className={`btn btn-sm ${currentScreen === 'screen-30' ? 'btn-primary' : 'btn-outline'}`}
+                title="Job Source Feeds Status"
+              >
+                <Database size={14} /> Sources
+              </button>
+            </>
+          ) : (
+            <>
+              <button 
+                id="nav-home"
+                onClick={() => navigateTo('screen-01')}
+                className={`btn btn-sm ${currentScreen === 'screen-01' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Home
+              </button>
+
+              <button 
+                id="nav-jobs"
+                onClick={() => navigateTo('screen-15')}
+                className={`btn btn-sm ${currentScreen === 'screen-15' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <Briefcase size={14} /> Jobs Feed
+              </button>
+
+              <button 
+                id="nav-demo-matches"
+                onClick={() => navigateTo('screen-17')}
+                className={`btn btn-sm ${currentScreen === 'screen-17' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                <Sparkles size={14} /> ATS Match Demo
+              </button>
+
+              <button 
+                id="nav-upload-cta"
+                onClick={() => navigateTo('screen-08')}
+                className="btn btn-sm btn-primary"
+              >
+                Upload Resume
+              </button>
+
+              <button 
+                id="nav-signin"
+                onClick={() => navigateTo('screen-04')}
+                className={`btn btn-sm ${currentScreen === 'screen-04' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Sign In
+              </button>
+
+              <button 
+                id="nav-signup"
+                onClick={() => navigateTo('screen-02')}
+                className={`btn btn-sm ${currentScreen === 'screen-02' ? 'btn-primary' : 'btn-secondary'}`}
+              >
+                Sign Up
+              </button>
+            </>
+          )}
         </div>
       </nav>
     </>

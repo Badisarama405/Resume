@@ -22,22 +22,36 @@ export function AppProvider({ children }) {
   const [selectedJobId, setSelectedJobId] = useState('job-101');
   const [selectedApplicationId, setSelectedApplicationId] = useState('app-01');
 
-  // Auth & Plan state
+  // Auth & Plan state: Default to unauthenticated Guest
   const [user, setUser] = useState({
-    id: 'user-001',
-    fullName: 'Rahul Sharma',
-    email: 'rahul.sharma@example.com',
-    isAuthenticated: true, // set authenticated so core product screens work immediately
+    id: 'user-guest',
+    fullName: 'Guest',
+    email: '',
+    isAuthenticated: false, // Default is Guest
     plan: 'free', // 'free' | 'pro'
     dailyMatchQuota: 10,
-    dailyMatchesUsed: 4,
+    dailyMatchesUsed: 0,
     monthlyAutoApplyQuota: 5,
-    monthlyAutoAppliesUsed: 2,
+    monthlyAutoAppliesUsed: 0,
     proExpiresAt: null
   });
 
-  // Candidate Profile (parsed from resume)
-  const [candidate, setCandidate] = useState(SAMPLE_CANDIDATES[0]);
+  // Candidate Profile (parsed from resume or new user)
+  const [candidate, setCandidate] = useState({
+    id: 'cand-user',
+    name: '',
+    headline: 'Software Engineer',
+    email: '',
+    phone: '',
+    currentCompany: '',
+    currentRole: 'Software Engineer',
+    experienceYears: 2.5,
+    education: 'B.Tech / Bachelor Degree',
+    targetLocations: ['Bangalore', 'Hyderabad', 'Remote'],
+    skills: ['Python', 'SQL', 'FastAPI', 'PostgreSQL', 'Docker', 'AWS'],
+    summary: 'Upload your resume to automatically extract your work history, skills, and projects.',
+    resumeFileName: ''
+  });
 
   // Multiple Resumes (for Pro feature - Screen 24)
   const [resumes, setResumes] = useState([
@@ -220,13 +234,72 @@ export function AppProvider({ children }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const loginUser = (email = 'rahul.sharma@example.com') => {
-    setUser(prev => ({ ...prev, email, isAuthenticated: true }));
+  const loginUser = (userData = {}) => {
+    let email = 'user@example.com';
+    let name = 'User';
+
+    if (typeof userData === 'string') {
+      email = userData;
+      name = email.split('@')[0] || 'User';
+    } else if (typeof userData === 'object') {
+      email = userData.email || 'user@example.com';
+      name = userData.fullName || userData.name || (email ? email.split('@')[0] : 'User');
+    }
+
+    setUser(prev => ({
+      ...prev,
+      id: `user-${Date.now()}`,
+      fullName: name,
+      email: email,
+      isAuthenticated: true
+    }));
+
+    setCandidate(prev => ({
+      ...prev,
+      name: prev.name && prev.name !== 'Guest' ? prev.name : name,
+      email: email
+    }));
   };
 
   const logoutUser = () => {
-    setUser(prev => ({ ...prev, isAuthenticated: false }));
+    setUser({
+      id: 'user-guest',
+      fullName: 'Guest',
+      email: '',
+      isAuthenticated: false,
+      plan: 'free',
+      dailyMatchQuota: 10,
+      dailyMatchesUsed: 0,
+      monthlyAutoApplyQuota: 5,
+      monthlyAutoAppliesUsed: 0,
+      proExpiresAt: null
+    });
+    setCandidate({
+      id: 'cand-user',
+      name: '',
+      headline: 'Software Engineer',
+      email: '',
+      phone: '',
+      currentCompany: '',
+      currentRole: 'Software Engineer',
+      experienceYears: 2.5,
+      education: 'B.Tech / Bachelor Degree',
+      targetLocations: ['Bangalore', 'Hyderabad', 'Remote'],
+      skills: ['Python', 'SQL', 'FastAPI', 'PostgreSQL', 'Docker', 'AWS'],
+      summary: 'Upload your resume to automatically extract your work history, skills, and projects.',
+      resumeFileName: ''
+    });
     navigateTo('screen-01');
+  };
+
+  const loadDemoCandidate = () => {
+    setCandidate(SAMPLE_CANDIDATES[0]);
+    setUser(prev => ({
+      ...prev,
+      fullName: SAMPLE_CANDIDATES[0].name,
+      email: SAMPLE_CANDIDATES[0].email,
+      isAuthenticated: true
+    }));
   };
 
   const toggleSaveJob = (jobId) => {
@@ -332,7 +405,8 @@ export function AppProvider({ children }) {
         notifications,
         sources,
         setSources,
-        jobMatches
+        jobMatches,
+        loadDemoCandidate
       }}
     >
       {children}

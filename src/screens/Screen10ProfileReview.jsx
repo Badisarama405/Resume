@@ -9,11 +9,11 @@ export function Screen10ProfileReview() {
   const { navigateTo, candidate, setCandidate, setUser } = useApp();
 
   // All extracted fields made 100% editable
-  const [name, setName] = useState(candidate.name || 'Rahul Sharma');
-  const [headline, setHeadline] = useState(candidate.headline || 'Backend Engineer / Python & Cloud Specialist');
-  const [email, setEmail] = useState(candidate.email || 'rahul.sharma@example.com');
-  const [phone, setPhone] = useState(candidate.phone || '+91 98765 43210');
-  const [currentCompany, setCurrentCompany] = useState(candidate.currentCompany || 'Accenture India');
+  const [name, setName] = useState(candidate.name || '');
+  const [headline, setHeadline] = useState(candidate.headline || 'Software Engineer / Backend & Cloud');
+  const [email, setEmail] = useState(candidate.email || '');
+  const [phone, setPhone] = useState(candidate.phone || '');
+  const [currentCompany, setCurrentCompany] = useState(candidate.currentCompany || '');
   const [currentRole, setCurrentRole] = useState(candidate.currentRole || 'Software Engineer');
 
   const [summary, setSummary] = useState(candidate.summary || '');

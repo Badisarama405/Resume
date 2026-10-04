@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 const SCREENS = [
   'screen-01', 'screen-02', 'screen-03', 'screen-04', 'screen-05', 'screen-06',
@@ -11,7 +12,7 @@ const SCREENS = [
 ];
 
 const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const tempDir = path.resolve('scratch_tests');
+const tempDir = path.join(os.tmpdir(), 'careerpilot_tests');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
@@ -25,14 +26,14 @@ let failed = 0;
 
 for (const screenId of SCREENS) {
   const url = `http://localhost:3000/#${screenId}`;
-  const outPath = path.join(tempDir, `${screenId}.html`);
 
   try {
     // Run headless chrome with virtual time budget to allow React to mount
-    const cmd = `"${chromePath}" --headless=new --dump-dom --virtual-time-budget=2000 "${url}" > "${outPath}"`;
-    execSync(cmd, { stdio: 'pipe', timeout: 15000 });
-
-    const html = fs.readFileSync(outPath, 'utf-8');
+    const html = execSync(`"${chromePath}" --headless=new --dump-dom --virtual-time-budget=2000 "${url}"`, {
+      encoding: 'utf-8',
+      timeout: 15000,
+      maxBuffer: 10 * 1024 * 1024
+    });
     
     // Check if error boundary caught an error
     const hasError = html.includes('Something went wrong loading this screen') || html.includes('Runtime Error');

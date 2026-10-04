@@ -37,7 +37,7 @@ export function Screen01Landing() {
           Stop blind-applying on Naukri and LinkedIn. CareerPilot extracts your resume, calculates your verified ATS compatibility score (0–100), and auto-applies or delivers 1-click verified job links.
         </p>
 
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap' }}>
           <button 
             id="hero-cta-upload"
             onClick={() => navigateTo('screen-08')}
@@ -47,11 +47,18 @@ export function Screen01Landing() {
             Upload Resume & Find Jobs
           </button>
           <button 
-            id="hero-cta-demo"
-            onClick={() => navigateTo('screen-13')}
+            id="hero-cta-signup"
+            onClick={() => navigateTo('screen-02')}
             className="btn btn-secondary btn-lg"
           >
-            See Live Matches (Aha Moment) <ArrowRight size={18} />
+            Create Free Account <ArrowRight size={18} />
+          </button>
+          <button 
+            id="hero-cta-signin"
+            onClick={() => navigateTo('screen-04')}
+            className="btn btn-outline btn-lg"
+          >
+            Sign In
           </button>
         </div>
 

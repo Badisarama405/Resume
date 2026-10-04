@@ -4,19 +4,25 @@ import { ArrowRight, Lock, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export function Screen04Login() {
   const { navigateTo, loginUser } = useApp();
-  const [email, setEmail] = useState('rahul.sharma@example.com');
-  const [password, setPassword] = useState('Password@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    loginUser(email);
-    navigateTo('screen-13'); // Proceed to First Matches or Dashboard
+    loginUser({
+      email,
+      fullName: email ? email.split('@')[0] : 'Member'
+    });
+    navigateTo('screen-14'); // Go to Dashboard once logged in
   };
 
   const handleDemoLogin = () => {
-    loginUser('rahul.sharma@example.com');
-    navigateTo('screen-13');
+    loginUser({
+      email: 'rahul.sharma@example.com',
+      fullName: 'Rahul Sharma'
+    });
+    navigateTo('screen-14');
   };
 
   return (

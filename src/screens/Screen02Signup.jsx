@@ -5,19 +5,31 @@ import { Sparkles, ArrowRight, ShieldCheck, Check, Upload, Lock, Mail, User } fr
 export function Screen02Signup() {
   const { navigateTo, loginUser } = useApp();
   const [formData, setFormData] = useState({
-    fullName: 'Rahul Sharma',
-    email: 'rahul.sharma@example.com',
-    password: 'Password@2026',
-    resumeAttached: true
+    fullName: '',
+    email: '',
+    password: '',
+    resumeAttached: false
   });
 
-  const [passwordStrength, setPasswordStrength] = useState('Strong');
+  const [passwordStrength, setPasswordStrength] = useState('Medium');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    loginUser(formData.email);
+    loginUser({
+      fullName: formData.fullName || (formData.email ? formData.email.split('@')[0] : 'Member'),
+      email: formData.email
+    });
     // Proceed to Step 1 of onboarding: Screen 07 Welcome or Screen 08 Resume Upload
     navigateTo('screen-07');
+  };
+
+  const handleDemoFill = () => {
+    setFormData({
+      fullName: 'Rahul Sharma',
+      email: 'rahul.sharma@example.com',
+      password: 'Password@2026',
+      resumeAttached: true
+    });
   };
 
   return (
