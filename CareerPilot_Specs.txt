@@ -1,0 +1,317 @@
+## 1. ONE-Liner
+
+AI-powered job matching and application automation for Indian job seekers.
+
+## 2. Core Promise
+
+* Discover relevant jobs across multiple job portals and company websites.
+
+* Match candidate profiles against job descriptions and calculate an ATS compatibility score.
+
+* Automatically apply to eligible jobs or email candidates when manual action is required.
+
+## 3. Target user
+
+Rahul Sharma — an Indian IT professional with 2–5 years of experience, actively seeking a job switch and applying to 20–30 jobs daily.
+
+## 4. MVP Features
+
+|
+Rank
+
+|
+
+Feature
+
+|
+
+Specification
+
+|
+| --- | --- | --- |
+|
+
+1
+
+|
+
+Candidate Profile
+
+|
+
+Upload resume (PDF/DOCX), extract skills, experience, education, and preferred locations.
+
+|
+|
+
+2
+
+|
+
+Job Discovery
+
+|
+
+Collect relevant jobs from permitted job feeds, APIs, and company career pages.
+
+|
+|
+
+3
+
+|
+
+Job Description Extraction
+
+|
+
+Extract role, skills, experience, location, salary, and application URL.
+
+|
+|
+
+4
+
+|
+
+AI Job Matching
+
+|
+
+Compare candidate skills, experience, and qualifications against each JD.
+
+|
+|
+
+5
+
+|
+
+ATS Compatibility Score
+
+|
+
+Generate a 0–100 score with matched skills, missing skills, and score breakdown.
+
+|
+|
+
+6
+
+|
+
+Application Threshold
+
+|
+
+Allow candidates to configure an automatic-application threshold, defaulting to 75/100.
+
+|
+|
+
+7
+
+|
+
+Application Automation
+
+|
+
+Submit applications through supported company career portals where automation is permitted.
+
+|
+|
+
+8
+
+|
+
+Manual Application Alerts
+
+|
+
+Email the candidate the job link, match score, and application instructions when automation is unavailable.
+
+|
+|
+
+9
+
+|
+
+Application Tracker
+
+|
+
+Track discovered, eligible, applied, manual-action-required, and failed applications.
+
+|
+|
+
+10
+
+|
+
+Daily Job Digest
+
+|
+
+Send a daily email containing matching jobs and application outcomes.
+
+|
+
+## 5. FREE Tier Vs ₹499/month
+
+|
+Feature
+
+|
+
+Free
+
+|
+
+Pro — ₹499/month
+
+|
+| --- | --- | --- |
+|
+
+Resume profiles
+
+|
+
+1
+
+|
+
+3
+
+|
+|
+
+Job matches
+
+|
+
+10/day
+
+|
+
+100/day
+
+|
+|
+
+ATS compatibility scoring
+
+|
+
+Basic
+
+|
+
+Detailed
+
+|
+|
+
+Job alerts
+
+|
+
+Daily
+
+|
+
+Real-time / configurable
+
+|
+|
+
+Automatic applications
+
+|
+
+5/month
+
+|
+
+100/month
+
+|
+|
+
+Application tracking
+
+|
+
+Basic
+
+|
+
+Full
+
+|
+|
+
+Email notifications
+
+|
+
+Yes
+
+|
+
+Yes
+
+|
+|
+
+Application history
+
+|
+
+7 days
+
+|
+
+90 days
+
+|
+
+Limits are proposed MVP quotas, not validated operating costs. Automatic applications are subject to each portal's terms, technical access, and supported workflows.
+
+## 6. Tech Stack
+
+* Frontend: Next.js + Tailwind CSS
+
+* Backend: Python + FastAPI + Celery
+
+* DB: PostgreSQL + pgvector
+
+* AI: OpenAI API for resume/JD extraction, skill matching, and scoring
+
+* Deploy: Vercel + Railway
+
+## 7. Time-To-MVP Estimate
+
+4–6 weeks for a solo developer using AI-assisted development.
+
+* Week 1: Authentication, resume upload, profile extraction.
+
+* Week 2: Job ingestion and JD extraction.
+
+* Week 3: Matching engine and ATS scoring.
+
+* Week 4: Email alerts, dashboard, and application tracker.
+
+* Weeks 5–6: Supported application automation, testing, and deployment.
+
+## 8. The One Feature: we cannot ship without (your verdict)
+
+Reliable Job-to-Candidate Matching with Explainable ATS Scoring.
+
+The product must accurately identify relevant jobs and explain why a candidate matches before triggering an application.
+
+Critical constraint: Do not make unrestricted auto-application across Naukri, LinkedIn, Indeed, or other portals a launch dependency. Access restrictions, anti-bot controls, CAPTCHAs, and portal-specific application flows can prevent reliable automation. Start with permitted job sources and supported application workflows; provide one-click application links and email alerts wherever automated submission is unavailable.

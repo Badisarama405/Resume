@@ -1,0 +1,3087 @@
+# UI Development Plan — AI Job Search & Application Automation Platform
+
+This document translates your complete 33-screen list into a screen-by-screen implementation specification for Codex. It is structured to support frontend development, component creation, routing, form validation, API integration, and end-to-end testing.
+
+The plan covers all 33 screens, including:
+
+* Exact screen purpose and visible UI elements.
+
+* All user actions and their expected interaction points.
+
+* Loading, empty, error, and success states.
+
+* Navigation between screens and contextual actions.
+
+* Application automation safeguards, usage limits, and failure recovery.
+
+* Consistent behavior across onboarding, job discovery, applications, and account settings.
+
+Implementation assumptions: The platform is a candidate-facing web application, optimized for desktop and responsive on mobile. Users can discover and match jobs, manage professional profiles, track applications, and configure permitted application automation. Job-source availability, supported application methods, subscription limits, and automation capabilities must come from backend configuration rather than hardcoded frontend assumptions.
+
+
+# 1. Pre-authentication
+
+## SCREEN 01 — Landing Page
+
+PURPOSE: Explain the platform's value and convert visitors into registered candidates by demonstrating how AI-powered job matching and application tracking work.
+
+WHAT IT SHOWS:
+
+* Navigation bar
+
+  * Platform logo and name.
+
+  * Product, How It Works, Features, Pricing, FAQ navigation links.
+
+  * Login button.
+
+  * Primary CTA: Get Started / Create Free Account.
+
+  * Mobile hamburger menu.
+* Hero section
+
+  * Headline describing AI-powered job discovery and application assistance.
+
+  * Supporting description explaining personalized job matching.
+
+  * Primary CTA: Get Started.
+
+  * Secondary CTA: See How It Works.
+
+  * Product dashboard preview or illustration.
+* Sample job match
+
+  * Job title, company, location, work mode.
+
+  * Match score and visual score indicator.
+
+  * Matched skills and missing skills preview.
+
+  * CTA: View Sample Match.
+
+  * Clearly labeled illustrative data if the match is not live.
+* How it works
+
+  * Step 1: Upload resume.
+
+  * Step 2: Set job preferences.
+
+  * Step 3: Discover matching jobs.
+
+  * Step 4: Track applications or use supported automation.
+* Feature cards
+
+  * AI resume analysis.
+
+  * Personalized job matching.
+
+  * Job discovery.
+
+  * Application tracking.
+
+  * Application automation, where supported.
+
+  * Notifications and activity history.
+* Trust and transparency section
+
+  * Supported job sources.
+
+  * Privacy and resume security links.
+
+  * Explanation of automation limitations.
+
+  * No-guaranteed-interview or employment disclaimer.
+* Pricing preview
+
+  * Available plans and key limits, if public.
+
+  * CTA: View Plans.
+* FAQ section
+
+  * Resume support.
+
+  * Job-source coverage.
+
+  * Match score meaning.
+
+  * Application automation requirements.
+
+  * Data privacy and account deletion.
+* Footer
+
+  * About, Contact, Help, Terms, Privacy Policy.
+
+  * Copyright and social links, if configured.
+
+WHAT THE USER CAN DO:
+
+* Explore product features.
+
+* View the sample match.
+
+* Review pricing and FAQs.
+
+* Open the login screen.
+
+* Start registration.
+
+* Navigate to help, privacy, and legal pages.
+
+* Open the mobile navigation menu.
+
+EDGE STATES:
+
+* Loading: Show skeleton placeholders for dynamically loaded pricing, testimonials, and sample job data.
+
+* Empty: Hide optional sections when no content is configured; retain the hero and registration CTA.
+
+* Error: Show a non-blocking fallback if dynamic content fails; keep registration and login available.
+
+* Success: Navigate to Signup when the visitor selects Get Started; navigate to Login when they select Login.
+
+## SCREEN 02 — Signup
+
+PURPOSE: Create a candidate account with validated credentials and initiate the appropriate email-verification flow.
+
+WHAT IT SHOWS:
+
+* Page heading: Create your account.
+
+* Supporting text explaining the registration process.
+
+* Signup form:
+
+  * Full name.
+
+  * Email address.
+
+  * Password.
+
+  * Confirm password, if required by the chosen form design.
+
+  * Show/hide password control.
+
+  * Password requirements.
+
+  * Terms of Service and Privacy Policy acceptance checkbox.
+
+* Primary CTA: Create Account.
+
+* Optional supported OAuth/SSO buttons.
+
+* Link: Already have an account? Log in.
+
+* Inline field validation.
+
+* Form-level error message area.
+
+* CAPTCHA or anti-bot verification when required.
+
+WHAT THE USER CAN DO:
+
+* Enter their name.
+
+* Enter their email address.
+
+* Create and confirm a password.
+
+* Reveal or conceal the password.
+
+* Review password requirements.
+
+* Accept the terms and privacy policy.
+
+* Complete anti-bot verification.
+
+* Submit the registration form.
+
+* Navigate to Login.
+
+EDGE STATES:
+
+* Loading: Disable submission, show a spinner, and prevent duplicate requests.
+
+* Empty: Show required-field indicators and prevent submission until mandatory fields are completed.
+
+* Error: Show field-specific errors for invalid email, weak password, mismatched passwords, unaccepted terms, existing account, rate limits, or server failure.
+
+* Success: Create the account, display a confirmation message, and route to Email Verification or directly to onboarding if verification is not required.
+
+## SCREEN 03 — Email Verification
+
+PURPOSE: Verify account ownership by validating the email address through the configured verification mechanism.
+
+WHAT IT SHOWS:
+
+* Heading: Verify your email.
+
+* Masked email address.
+
+* Instructions to check the inbox and spam folder.
+
+* Verification status indicator.
+
+* Resend verification email button.
+
+* Change email address link, if supported.
+
+* Verification code input if using an OTP-based flow.
+
+* Verify button, if applicable.
+
+* Countdown or resend cooldown.
+
+* Link to return to Login.
+
+* Support link.
+
+WHAT THE USER CAN DO:
+
+* View the email address awaiting verification.
+
+* Enter a verification code.
+
+* Submit the code.
+
+* Open the verification email.
+
+* Resend the verification email.
+
+* Change the email address when permitted.
+
+* Return to Login.
+
+* Contact support.
+
+EDGE STATES:
+
+* Loading: Show verification-in-progress indicator while validating the token or code.
+
+* Empty: Show instructions and keep the resend option available subject to cooldown.
+
+* Error: Display expired token, invalid code, already-used token, delivery failure, or rate-limit messages.
+
+* Success: Show an email-verified confirmation and navigate to onboarding or the intended destination.
+
+* Expired link: Offer a way to request a fresh verification email.
+
+* Already verified: Display the current verified status and provide a Continue button.
+
+## SCREEN 04 — Login
+
+PURPOSE: Authenticate existing candidates and route them to the appropriate next screen based on account and onboarding status.
+
+WHAT IT SHOWS:
+
+* Heading: Welcome back.
+
+* Email field.
+
+* Password field.
+
+* Show/hide password control.
+
+* Remember me option, if supported.
+
+* Forgot Password link.
+
+* Primary CTA: Log In.
+
+* Optional OAuth/SSO buttons.
+
+* Signup link.
+
+* Inline validation and authentication error area.
+
+* Security or CAPTCHA challenge when required.
+
+WHAT THE USER CAN DO:
+
+* Enter their email and password.
+
+* Reveal or conceal the password.
+
+* Choose Remember Me.
+
+* Submit login credentials.
+
+* Sign in through a supported identity provider.
+
+* Open Forgot Password.
+
+* Navigate to Signup.
+
+* Retry after authentication failure.
+
+EDGE STATES:
+
+* Loading: Disable the form and show an authentication spinner.
+
+* Empty: Prompt for required credentials.
+
+* Error: Show invalid credentials, unverified email, locked account, rate limit, network failure, or identity-provider error without exposing sensitive account information.
+
+* Success: Establish the session and route the user to onboarding if setup is incomplete, otherwise to Dashboard.
+
+* Expired session: Redirect to Login with a session-expired message.
+
+## SCREEN 05 — Forgot Password
+
+PURPOSE: Allow candidates to request a secure password-reset link or code without revealing whether an account exists.
+
+WHAT IT SHOWS:
+
+* Heading: Forgot your password?
+
+* Instructions.
+
+* Email address field.
+
+* CTA: Send Reset Link.
+
+* Link: Back to Login.
+
+* Success-message area.
+
+* Resend cooldown, if supported.
+
+WHAT THE USER CAN DO:
+
+* Enter their registered email address.
+
+* Request a password-reset link or code.
+
+* Correct the email address.
+
+* Resend the request when permitted.
+
+* Return to Login.
+
+EDGE STATES:
+
+* Loading: Disable the submit button and show a spinner.
+
+* Empty: Prompt for an email address.
+
+* Error: Display invalid email format, rate limiting, or service failure. Do not disclose whether the email is registered.
+
+* Success: Display a neutral confirmation that instructions will be sent if the account is eligible.
+
+* Expired request: Allow the user to request another reset link.
+
+## SCREEN 06 — Reset Password
+
+PURPOSE: Let a candidate securely replace their password after validating a password-reset token or code.
+
+WHAT IT SHOWS:
+
+* Heading: Create a new password.
+
+* New password field.
+
+* Confirm password field.
+
+* Show/hide controls.
+
+* Password requirements and strength indicator.
+
+* CTA: Reset Password.
+
+* Link to Login.
+
+* Token-validity status where applicable.
+
+WHAT THE USER CAN DO:
+
+* Enter a new password.
+
+* Confirm the new password.
+
+* Reveal or conceal password fields.
+
+* Review password requirements.
+
+* Submit the new password.
+
+* Return to Login.
+
+EDGE STATES:
+
+* Loading: Show token-validation or password-update progress.
+
+* Empty: Highlight required fields.
+
+* Error: Display invalid or expired token, weak password, mismatched confirmation, reused password if prohibited, or server error.
+
+* Success: Confirm the password change and navigate to Login.
+
+* Expired token: Provide a link to Forgot Password.
+
+* Security: Invalidate the reset token after successful use; follow the backend's session-revocation policy.
+
+# 2. Onboarding
+
+## SCREEN 07 — Welcome / Setup Progress
+
+PURPOSE: Introduce the onboarding workflow and guide the candidate through the minimum steps required to generate personalized job matches.
+
+WHAT IT SHOWS:
+
+* Welcome message using the candidate's name.
+
+* Onboarding progress indicator: Step 1 of 3, Step 2 of 3, Step 3 of 3.
+
+* Three-step checklist:
+
+  * Upload resume.
+
+  * Review professional profile and preferences.
+
+  * Configure application preferences.
+
+* Estimated completion time, if established.
+
+* Explanation of why each step is required.
+
+* CTA: Start Setup / Continue Setup.
+
+* Sign-out option.
+
+* Help link.
+
+WHAT THE USER CAN DO:
+
+* Start onboarding.
+
+* Continue an incomplete setup.
+
+* Review onboarding steps.
+
+* Navigate to the current required step.
+
+* Sign out.
+
+* Open Help.
+
+EDGE STATES:
+
+* Loading: Retrieve onboarding status and show a progress skeleton.
+
+* Empty: For a new candidate, show all steps as incomplete.
+
+* Error: Display a setup-loading error and a Retry button.
+
+* Success: Mark completed steps, resume at the first incomplete step, and route to the first-match screen after all required steps are complete.
+
+* Returning user: Preserve previously completed steps and entered data.
+
+## SCREEN 08 — Resume Upload
+
+PURPOSE: Collect one or more supported resume files so the system can extract professional information for job matching.
+
+WHAT IT SHOWS:
+
+* Heading: Upload your resume.
+
+* Instructions and supported file formats: PDF and DOCX.
+
+* Maximum file size and upload limits from backend configuration.
+
+* Drag-and-drop upload zone.
+
+* Browse Files button.
+
+* Selected file list:
+
+  * File name.
+
+  * File type.
+
+  * File size.
+
+  * Upload progress.
+
+  * Upload status.
+
+  * Remove button.
+
+* Primary CTA: Upload and Continue.
+
+* Secondary CTA: Skip, only if skipping is permitted.
+
+* Privacy and file-handling information.
+
+* Resume-profile limit indicator, if applicable.
+
+WHAT THE USER CAN DO:
+
+* Drag files into the upload zone.
+
+* Browse and select files.
+
+* Upload a supported resume.
+
+* Remove a selected file.
+
+* Replace a file before processing.
+
+* Retry a failed upload.
+
+* Continue to processing.
+
+* Skip the step if the product permits it.
+
+EDGE STATES:
+
+* Loading: Show per-file upload progress and disable duplicate submissions.
+
+* Empty: Display the upload zone and supported formats.
+
+* Error: Show unsupported format, file too large, corrupted file, password-protected file, upload interruption, duplicate file, or storage failure.
+
+* Success: Save the resume, display its upload status, and navigate to Resume Processing.
+
+* Limit reached: Explain the resume limit and offer the permitted alternative.
+
+* Partial upload: Preserve successful files and allow failed files to be retried independently.
+
+## SCREEN 09 — Resume Processing
+
+PURPOSE: Communicate the progress of resume parsing and AI-based extraction while preventing the candidate from editing incomplete profile data.
+
+WHAT IT SHOWS:
+
+* Heading: Analyzing your resume.
+
+* Uploaded file name.
+
+* Processing progress indicator.
+
+* Processing stages:
+
+  * File validation.
+
+  * Text extraction.
+
+  * Professional information extraction.
+
+  * Skills and experience identification.
+
+  * Profile preparation.
+
+* Current stage and status.
+
+* Informational message explaining the process.
+
+* Cancel or Retry action when supported.
+
+* Link to Help.
+
+WHAT THE USER CAN DO:
+
+* View processing progress.
+
+* Wait for processing to finish.
+
+* Retry processing when available.
+
+* Cancel processing when supported.
+
+* Contact support if processing remains stuck.
+
+* Navigate away if the product allows background processing.
+
+EDGE STATES:
+
+* Loading: Show the current processing stage and refresh status through polling, server events, or another supported mechanism.
+
+* Empty: If no resume is attached, redirect to Resume Upload.
+
+* Error: Display parsing failure, unsupported content, unreadable file, AI service failure, or timeout; offer retry and re-upload options.
+
+* Success: Display completion and navigate to AI Profile Review.
+
+* Long-running: Show a clear pending state without falsely reporting a percentage that the backend cannot provide.
+
+* Cancelled: Display the cancelled state and offer resume upload or processing restart.
+
+## SCREEN 10 — AI Profile Review
+
+PURPOSE: Let candidates verify and correct AI-extracted professional information before using it for job matching.
+
+WHAT IT SHOWS:
+
+* Heading: Review your professional profile.
+
+* Extraction status and source resume.
+
+* Editable profile sections:
+
+  * Full name.
+
+  * Email and contact details, where extracted and permitted.
+
+  * Professional headline.
+
+  * Total experience.
+
+  * Current and previous roles.
+
+  * Employment history.
+
+  * Skills.
+
+  * Education.
+
+  * Certifications.
+
+  * Projects.
+
+  * Industries.
+
+  * Summary.
+
+* Each employment record:
+
+  * Employer.
+
+  * Job title.
+
+  * Start and end dates.
+
+  * Description.
+
+* Each education record:
+
+  * Institution.
+
+  * Qualification.
+
+  * Field of study.
+
+  * Graduation year.
+
+* Skill chips with add/remove controls.
+
+* Uncertain or missing fields highlighted for review.
+
+* Resume preview or download link, if supported.
+
+* CTA: Save and Continue.
+
+* Secondary CTA: Back to Upload.
+
+* Save status indicator.
+
+WHAT THE USER CAN DO:
+
+* Review extracted information.
+
+* Edit profile fields.
+
+* Add or remove skills.
+
+* Add, edit, or delete employment records.
+
+* Add, edit, or delete education records.
+
+* Add certifications and projects.
+
+* Correct dates and experience details.
+
+* Preview the uploaded resume.
+
+* Save changes.
+
+* Return to Resume Upload.
+
+* Continue to Job Preferences.
+
+EDGE STATES:
+
+* Loading: Show skeleton sections while extracted data is retrieved.
+
+* Empty: Display an editable blank profile with clear instructions if extraction returned no usable data.
+
+* Error: Display field-save errors, extraction errors, or profile-load failures; preserve unsaved edits locally where feasible.
+
+* Success: Save the validated profile and navigate to Job Preferences.
+
+* Partial extraction: Display successfully extracted fields and flag missing fields for manual entry.
+
+* Validation failure: Highlight invalid dates, malformed values, and inconsistent employment ranges.
+
+* Unsaved changes: Warn before navigating away from edited fields.
+
+## SCREEN 11 — Job Preferences
+
+PURPOSE: Capture the candidate's target roles, locations, experience range, and work-mode preferences to personalize job discovery.
+
+WHAT IT SHOWS:
+
+* Heading: What kind of job are you looking for?
+
+* Target job titles input with multi-select chips.
+
+* Preferred skills or role keywords, if supported.
+
+* Preferred industries, if supported.
+
+* Location selector with multiple locations.
+
+* Remote, hybrid, and onsite work-mode options.
+
+* Minimum and maximum experience range.
+
+* Employment type:
+
+  * Full-time.
+
+  * Contract.
+
+  * Internship.
+
+  * Part-time, where supported.
+
+* Salary range and currency, if supported.
+
+* Willingness to relocate, if supported.
+
+* Excluded companies or keywords, if supported.
+
+* Search frequency or discovery schedule, if configurable.
+
+* CTA: Save and Continue.
+
+* Back button.
+
+* Clear Preferences option.
+
+WHAT THE USER CAN DO:
+
+* Add and remove target job titles.
+
+* Add and remove preferred locations.
+
+* Select work modes.
+
+* Set experience requirements.
+
+* Choose employment types.
+
+* Enter salary expectations.
+
+* Set relocation preferences.
+
+* Add excluded companies or keywords.
+
+* Save preferences.
+
+* Clear preferences.
+
+* Return to Profile Review.
+
+* Continue to Application Preferences.
+
+EDGE STATES:
+
+* Loading: Load saved preferences and location suggestions.
+
+* Empty: Show default values or prompt the candidate to select at least one target role.
+
+* Error: Display invalid ranges, unavailable locations, failed saves, or suggestion-service failures.
+
+* Success: Persist preferences and proceed to Application Preferences.
+
+* No results: Show a message when a location or title lookup returns no suggestions, while allowing supported custom entries.
+
+* Invalid range: Prevent minimum experience or salary from exceeding the maximum.
+
+## SCREEN 12 — Application Preferences
+
+PURPOSE: Let candidates define matching thresholds, permitted application automation behavior, daily limits, and notification preferences before enabling automation.
+
+WHAT IT SHOWS:
+
+* Heading: Configure your application preferences.
+
+* Minimum match score
+
+  * Slider or numeric input.
+
+  * Visible selected percentage.
+
+  * Explanation of the threshold.
+
+* Application mode
+
+  * Manual only.
+
+  * Assisted application.
+
+  * Automated application, only if supported and eligible.
+
+* Confirmation behavior
+
+  * Require confirmation before each application.
+
+  * Allow automation within configured limits, where permitted.
+
+* Application limits
+
+  * Maximum applications per day.
+
+  * Maximum applications per week, if supported.
+
+  * Remaining plan allowance.
+
+* Safety controls
+
+  * Never submit without required candidate consent.
+
+  * Pause on unsupported questions or missing information.
+
+  * Pause when additional user action is required.
+
+  * Do not fabricate answers or credentials.
+
+* Notification preferences
+
+  * Email alerts.
+
+  * In-app notifications.
+
+  * Daily or weekly digest.
+
+  * Failure alerts.
+
+* Automation eligibility notice
+
+  * Supported application types.
+
+  * Plan requirements.
+
+  * Site-specific restrictions.
+
+* CTA: Save Preferences.
+
+* CTA: Find My Matches.
+
+* Back button.
+
+WHAT THE USER CAN DO:
+
+* Set the minimum match score.
+
+* Choose an application mode.
+
+* Enable or disable permitted automation.
+
+* Set application limits within plan restrictions.
+
+* Choose confirmation requirements.
+
+* Configure notification preferences.
+
+* Save settings.
+
+* Return to Job Preferences.
+
+* Start the first matching run.
+
+EDGE STATES:
+
+* Loading: Retrieve saved preferences, plan limits, and automation eligibility.
+
+* Empty: Show safe defaults, such as manual application mode, until the candidate makes a selection.
+
+* Error: Display invalid thresholds, plan restrictions, failed saves, or unavailable automation.
+
+* Success: Persist preferences and navigate to First Match Results.
+
+* Limit exceeded: Clamp or reject values beyond the plan's permitted limits and explain the restriction.
+
+* Automation unavailable: Disable the unavailable option and explain the eligibility requirement.
+
+* Consent missing: Prevent automated application activation until required consent is recorded.
+
+## SCREEN 13 — First Match Results
+
+PURPOSE: Deliver the first personalized job matches and demonstrate the value of the candidate's resume and preferences.
+
+WHAT IT SHOWS:
+
+* Heading: Your first job matches.
+
+* Summary:
+
+  * Total jobs found.
+
+  * Strong matches.
+
+  * Average match score, if meaningful.
+
+  * Search completion timestamp.
+
+* Job cards containing:
+
+  * Job title.
+
+  * Company.
+
+  * Location.
+
+  * Work mode.
+
+  * Experience requirements.
+
+  * Match score.
+
+  * Top matched skills.
+
+  * Key missing skills.
+
+  * Job discovery date.
+
+  * CTA: View Job.
+
+* Match-score explanation.
+
+* Empty-results guidance.
+
+* CTA: Go to Dashboard.
+
+* CTA: Adjust Preferences.
+
+* CTA: View All Matches.
+
+WHAT THE USER CAN DO:
+
+* Review the first matches.
+
+* Open a job detail.
+
+* View match analysis.
+
+* Adjust job preferences.
+
+* Save or dismiss a job, if supported.
+
+* Open the full Job Matches screen.
+
+* Continue to the Dashboard.
+
+EDGE STATES:
+
+* Loading: Show job-card skeletons and the matching status.
+
+* Empty: Explain that no jobs currently match; offer to broaden titles, locations, experience, or threshold.
+
+* Error: Show matching-service failure and a Retry button.
+
+* Success: Display ranked job matches according to the configured matching algorithm.
+
+* Partial results: Show available results and indicate that additional sources are still processing.
+
+* No supported sources: Explain that no configured sources are currently available and provide a retry option.
+
+# 3. Core Product
+
+## SCREEN 14 — Dashboard / Job Command Center
+
+PURPOSE: Provide a consolidated daily overview of new opportunities, strong matches, application progress, pending actions, and system failures.
+
+WHAT IT SHOWS:
+
+* Header
+
+  * Personalized greeting.
+
+  * Current date or reporting period.
+
+  * Last data refresh timestamp.
+
+  * Search or refresh control.
+
+  * Notifications icon.
+
+  * Profile menu.
+* Summary cards
+
+  * New Jobs.
+
+  * Strong Matches.
+
+  * Applications.
+
+  * Action Required.
+
+  * Failures.
+* Each summary card:
+
+  * Current count.
+
+  * Comparison with a previous period, if available.
+
+  * Click-through navigation.
+* New opportunities section
+
+  * Recently discovered jobs.
+
+  * Match scores.
+
+  * View All CTA.
+* Strong matches section
+
+  * Highest-scoring eligible jobs.
+
+  * Matched skills.
+
+  * Application status.
+* Application activity
+
+  * Recent submissions.
+
+  * Pending applications.
+
+  * Interview or offer updates, if tracked.
+* Action required
+
+  * Incomplete application details.
+
+  * Applications requiring manual intervention.
+
+  * Expired or invalid application links.
+* Automation health
+
+  * Active, paused, or unavailable status.
+
+  * Recent failures.
+
+  * Remaining daily or plan quota.
+* Quick actions
+
+  * Upload Resume.
+
+  * Edit Preferences.
+
+  * Browse Matches.
+
+  * View Application Tracker.
+
+WHAT THE USER CAN DO:
+
+* View daily metrics.
+
+* Open new jobs.
+
+* View strong matches.
+
+* Open the application tracker.
+
+* Resolve action-required items.
+
+* Inspect failed applications.
+
+* Refresh dashboard data.
+
+* Navigate to profile and settings.
+
+* Open notifications.
+
+* Pause or resume permitted automation.
+
+* Start a new job search.
+
+EDGE STATES:
+
+* Loading: Show card and list skeletons; load independent sections progressively.
+
+* Empty: For a new candidate, show onboarding or first-search guidance instead of zero-filled empty charts.
+
+* Error: Display section-level errors with Retry actions; preserve successfully loaded sections.
+
+* Success: Show current metrics and actionable lists.
+
+* Stale data: Display the last-updated timestamp and a refresh option.
+
+* Automation paused: Show the pause reason and permitted resume action.
+
+* Quota exhausted: Display remaining quota as zero and explain when usage resets or how plan limits can be changed.
+
+## SCREEN 15 — Job Matches
+
+PURPOSE: Provide a searchable, filterable collection of discovered jobs that match the candidate's professional profile and preferences.
+
+WHAT IT SHOWS:
+
+* Page heading: Job Matches.
+
+* Search input for title, company, or keyword.
+
+* Results count.
+
+* Sort control:
+
+  * Match score.
+
+  * Date discovered.
+
+  * Job posted date, if available.
+
+  * Relevance.
+
+* Filters:
+
+  * Minimum/maximum match score.
+
+  * Location.
+
+  * Experience range.
+
+  * Remote/hybrid/onsite.
+
+  * Date discovered.
+
+  * Application status.
+
+  * Employment type, if supported.
+
+  * Company, if supported.
+
+* Active filter chips.
+
+* Clear All Filters control.
+
+* Job cards or rows:
+
+  * Job title.
+
+  * Company.
+
+  * Location.
+
+  * Work mode.
+
+  * Experience range.
+
+  * Salary, if available.
+
+  * Match score.
+
+  * Posted/discovered dates.
+
+  * Application status.
+
+  * Matched skills preview.
+
+  * Save/bookmark control, if supported.
+
+  * View Details CTA.
+
+* Pagination or infinite scroll.
+
+* Refresh results control.
+
+WHAT THE USER CAN DO:
+
+* Search jobs.
+
+* Apply and remove filters.
+
+* Sort results.
+
+* Clear all filters.
+
+* Open a job detail.
+
+* View match analysis.
+
+* Save or unsave jobs, if supported.
+
+* Open the application flow.
+
+* Mark a job as dismissed, if supported.
+
+* Navigate through result pages.
+
+* Refresh the results.
+
+EDGE STATES:
+
+* Loading: Show result-card skeletons and preserve selected filters.
+
+* Empty: Distinguish between no jobs discovered and no jobs matching the current filters.
+
+* Error: Display search or filter errors with Retry.
+
+* Success: Render matching job records and current result count.
+
+* No filter results: Offer Clear Filters.
+
+* Duplicate jobs: Display one canonical listing when deduplication is available.
+
+* Stale job: Mark expired or closed listings and disable unsupported application actions.
+
+* Source unavailable: Preserve existing results and indicate when source refresh is affected.
+
+## SCREEN 16 — Job Detail
+
+PURPOSE: Present the complete available job information and provide clear next steps for reviewing, saving, or applying to the opportunity.
+
+WHAT IT SHOWS:
+
+* Breadcrumb: Dashboard / Job Matches / Job Detail.
+
+* Job header:
+
+  * Job title.
+
+  * Company name and logo, if available.
+
+  * Location.
+
+  * Work mode.
+
+  * Employment type.
+
+  * Experience range.
+
+  * Salary range, if available.
+
+  * Posted date.
+
+  * Discovered date.
+
+* Match score and summary.
+
+* Application status.
+
+* Full job description.
+
+* Responsibilities.
+
+* Required qualifications.
+
+* Preferred qualifications.
+
+* Required and preferred skills.
+
+* Company information.
+
+* Original job source.
+
+* Original application URL.
+
+* Source verification or last-checked timestamp, if available.
+
+* Job status: Open, Closed, Expired, or Unknown.
+
+* Primary CTA: Apply / Continue Application.
+
+* Secondary CTA: View Match Analysis.
+
+* Save Job control, if supported.
+
+* Report Invalid Listing control, if supported.
+
+* Related jobs section.
+
+WHAT THE USER CAN DO:
+
+* Read the complete job description.
+
+* View match analysis.
+
+* Open the original job posting.
+
+* Start an eligible application.
+
+* Save or unsave the job.
+
+* Report an invalid listing.
+
+* View related jobs.
+
+* Return to Job Matches.
+
+* Review application status.
+
+EDGE STATES:
+
+* Loading: Show job-detail skeletons.
+
+* Empty: If the job ID is invalid or missing, show a not-found state and return to Job Matches.
+
+* Error: Display job-load failure and Retry.
+
+* Success: Display complete available job information.
+
+* Expired/closed: Show the job status and disable application actions where the source confirms closure.
+
+* Incomplete JD: Label missing fields as unavailable rather than inventing values.
+
+* External link unavailable: Disable the link and explain that the source URL is missing or invalid.
+
+## SCREEN 17 — Match Analysis
+
+PURPOSE: Explain how the candidate's profile compares with a particular job's requirements and how the match score was calculated.
+
+WHAT IT SHOWS:
+
+* Job title and company.
+
+* Overall match score.
+
+* Score interpretation or threshold indicator.
+
+* Score calculation timestamp and algorithm version, if available.
+
+* Score breakdown
+
+  * Skills match.
+
+  * Experience match.
+
+  * Location/work-mode match.
+
+  * Other configured factors.
+
+* Matched skills
+
+  * Skill name.
+
+  * Evidence from the candidate's profile.
+
+  * Relevance to the job.
+
+* Missing or weaker skills
+
+  * Skill name.
+
+  * Requirement type.
+
+  * Importance, if assessed.
+
+* Experience comparison
+
+  * Candidate experience.
+
+  * Required experience.
+
+  * Difference.
+
+* Qualification comparison
+
+  * Required education/certifications.
+
+  * Candidate's corresponding qualifications.
+
+* Profile evidence
+
+  * Relevant roles.
+
+  * Projects.
+
+  * Certifications.
+
+* Explanation of score limitations.
+
+* CTA: View Job.
+
+* CTA: Update Profile.
+
+* CTA: Apply.
+
+* CTA: Recalculate Match, if supported.
+
+WHAT THE USER CAN DO:
+
+* Review the overall score.
+
+* Inspect individual score components.
+
+* Expand matched-skill evidence.
+
+* Review missing skills.
+
+* Compare experience requirements.
+
+* Open relevant profile sections.
+
+* Update their profile.
+
+* Recalculate the match when supported.
+
+* Return to Job Detail.
+
+* Start the application flow.
+
+EDGE STATES:
+
+* Loading: Show score and comparison skeletons.
+
+* Empty: Explain when the job lacks sufficient information to calculate a meaningful score.
+
+* Error: Display analysis-service failure and Retry.
+
+* Success: Show the score, breakdown, and available supporting evidence.
+
+* Partial analysis: Display available components and mark unavailable components.
+
+* Stale analysis: Show the analysis timestamp and offer recalculation.
+
+* Profile changed: Indicate that the score may no longer reflect the latest profile.
+
+## SCREEN 18 — Application Confirmation
+
+PURPOSE: Obtain the required candidate confirmation before submitting an eligible application through an automated or assisted workflow.
+
+WHAT IT SHOWS:
+
+* Heading: Review your application.
+
+* Job title and company.
+
+* Original job source.
+
+* Candidate profile/resume selected for the application.
+
+* Match score.
+
+* Application method:
+
+  * External application.
+
+  * Assisted application.
+
+  * Automated submission, where supported.
+
+* Application summary:
+
+  * Resume to be submitted.
+
+  * Known form fields.
+
+  * Candidate-provided answers.
+
+  * Required unanswered questions.
+
+* Consent statement describing the intended submission.
+
+* Application quota impact.
+
+* Any applicable usage charge.
+
+* Warnings:
+
+  * Missing information.
+
+  * Unsupported questions.
+
+  * Potentially stale listing.
+
+  * External-site requirements.
+
+* Primary CTA: Confirm and Apply.
+
+* Secondary CTA: Edit Application.
+
+* Cancel button.
+
+WHAT THE USER CAN DO:
+
+* Review the target job.
+
+* Review the selected resume.
+
+* Review application answers.
+
+* Edit application details.
+
+* Confirm the application.
+
+* Cancel the submission.
+
+* Open the original job listing.
+
+* Change the selected resume, if supported.
+
+EDGE STATES:
+
+* Loading: Retrieve application details and validate eligibility before enabling confirmation.
+
+* Empty: If no job or application context exists, redirect to Job Detail.
+
+* Error: Display invalid job, missing resume, expired listing, ineligible application, or quota failure.
+
+* Success: Record the user's confirmation and initiate the permitted application workflow; navigate to Application Status.
+
+* Confirmation expired: Require a fresh review before submitting.
+
+* Duplicate application: Warn the candidate and prevent duplicate submission unless explicitly allowed.
+
+* Missing answers: Block automated submission when required information is missing; offer manual completion.
+
+* Consent withdrawn: Cancel the pending submission.
+
+## SCREEN 19 — Application Status
+
+PURPOSE: Show the immediate outcome of an application attempt and provide a clear recovery path for failures or tasks requiring candidate action.
+
+WHAT IT SHOWS:
+
+* Outcome banner:
+
+  * Submitted.
+
+  * Failed.
+
+  * Action Required.
+
+  * Pending Verification.
+
+  * Pending.
+
+* Job title and company.
+
+* Application attempt timestamp.
+
+* Application method.
+
+* Status explanation.
+
+* External confirmation/reference ID, if available.
+
+* Application timeline:
+
+  * Prepared.
+
+  * Confirmed.
+
+  * Submitted.
+
+  * Acknowledged, if verified.
+
+* Failure reason, if applicable.
+
+* Required next steps.
+
+* CTA: View Application Details.
+
+* CTA: Retry Application, if safe.
+
+* CTA: Continue Manually.
+
+* CTA: Back to Job Matches.
+
+* CTA: Contact Support.
+
+WHAT THE USER CAN DO:
+
+* Review the application outcome.
+
+* View application details.
+
+* Inspect the event history.
+
+* Retry an eligible failed attempt.
+
+* Continue the application manually.
+
+* Open the original application URL.
+
+* Return to Job Matches.
+
+* Contact support.
+
+EDGE STATES:
+
+* Loading: Show submission-status progress while the backend confirms the outcome.
+
+* Empty: If the application record cannot be found, show a recoverable not-found message.
+
+* Error: Display status-fetch failures and allow retrying the status check.
+
+* Success: Display the confirmed result and next available actions.
+
+* Pending: Clearly distinguish an unknown outcome from a failed submission.
+
+* Duplicate risk: Do not offer an immediate resubmission if the original attempt may already have reached the employer.
+
+* External confirmation unavailable: State that submission was attempted but employer receipt is unverified.
+
+## SCREEN 20 — Manual Application
+
+PURPOSE: Guide candidates through an external application when automated submission is unavailable, unsupported, or requires manual intervention.
+
+WHAT IT SHOWS:
+
+* Heading: Complete your application.
+
+* Job title and company.
+
+* External application URL.
+
+* CTA: Open Application Website.
+
+* Step-by-step instructions.
+
+* Selected resume details.
+
+* Checklist of preparation steps.
+
+* Required information or documents, when known.
+
+* Optional notes field.
+
+* Application status indicator.
+
+* CTA: Mark as Applied.
+
+* CTA: Save for Later.
+
+* CTA: Return to Job Detail.
+
+WHAT THE USER CAN DO:
+
+* Open the external application website.
+
+* Review application instructions.
+
+* Download or select the intended resume, if supported.
+
+* Complete the employer's application externally.
+
+* Return to the platform.
+
+* Mark the job as applied.
+
+* Enter an application date or reference, if supported.
+
+* Save the application for later.
+
+* Cancel the workflow.
+
+EDGE STATES:
+
+* Loading: Load the job and application context.
+
+* Empty: If no valid application URL exists, show the available job-source details and explain the limitation.
+
+* Error: Display unavailable job data, invalid URL, or failure to save the manual status.
+
+* Success: Record the candidate's manual application status and show a confirmation.
+
+* Unverified submission: Label the status as candidate-reported rather than externally verified.
+
+* Already applied: Display the existing application record and prevent accidental duplicate records.
+
+* Unsaved changes: Warn before leaving if application notes or dates have changed.
+
+## SCREEN 21 — Application Tracker
+
+PURPOSE: Provide a centralized view of all candidate applications, their current statuses, and the next action required.
+
+WHAT IT SHOWS:
+
+* Heading: Application Tracker.
+
+* Summary cards:
+
+  * Total Applications.
+
+  * In Progress.
+
+  * Submitted.
+
+  * Action Required.
+
+  * Failed.
+
+  * Interviews or Offers, if tracked.
+
+* Search input.
+
+* Filters:
+
+  * Application status.
+
+  * Company.
+
+  * Job title.
+
+  * Application date range.
+
+  * Application method.
+
+  * Source.
+
+* Sort options:
+
+  * Most recent.
+
+  * Oldest.
+
+  * Job title.
+
+  * Company.
+
+  * Status.
+
+* Table or card list:
+
+  * Job title.
+
+  * Company.
+
+  * Location.
+
+  * Application date.
+
+  * Current status.
+
+  * Application method.
+
+  * Last activity.
+
+  * Next action.
+
+  * View Details CTA.
+
+* Pagination or infinite scroll.
+
+* Export control, if supported.
+
+WHAT THE USER CAN DO:
+
+* Search applications.
+
+* Filter applications.
+
+* Sort applications.
+
+* Open Application Detail.
+
+* Update supported statuses.
+
+* Continue incomplete applications.
+
+* Retry eligible failures.
+
+* Open the original job listing.
+
+* Export application data, if supported.
+
+* Navigate through pages.
+
+* Clear filters.
+
+EDGE STATES:
+
+* Loading: Show table or card skeletons.
+
+* Empty: Distinguish between no applications yet and no results for the selected filters.
+
+* Error: Display retrieval errors and Retry.
+
+* Success: Show application records and accurate summary counts.
+
+* Status conflict: Show the latest server-confirmed status and refresh stale records.
+
+* Large result set: Use server-side pagination or another bounded retrieval strategy.
+
+* No export permission: Hide or disable export with an explanation.
+
+## SCREEN 22 — Application Detail
+
+PURPOSE: Show the complete record of one application, including its job information, submission history, status changes, and required follow-up actions.
+
+WHAT IT SHOWS:
+
+* Breadcrumb: Application Tracker / Application Detail.
+
+* Job title and company.
+
+* Application status badge.
+
+* Application date and method.
+
+* Original job URL.
+
+* Selected resume/profile.
+
+* Submission reference, if available.
+
+* Current status explanation.
+
+* Application timeline
+
+  * Application created.
+
+  * Candidate confirmation.
+
+  * Submission attempt.
+
+  * Submission outcome.
+
+  * Status changes.
+
+  * Manual updates.
+
+* Event history
+
+  * Timestamp.
+
+  * Event type.
+
+  * Result.
+
+  * Error or supporting detail.
+
+* Candidate notes.
+
+* Follow-up date, if supported.
+
+* Interview or offer details, if tracked.
+
+* Available actions:
+
+  * Retry.
+
+  * Continue Manually.
+
+  * Update Status.
+
+  * Add Note.
+
+  * Delete/Archive, if supported.
+
+WHAT THE USER CAN DO:
+
+* Review the complete application history.
+
+* Open the original job listing.
+
+* Inspect submission attempts.
+
+* Update supported application statuses.
+
+* Add or edit notes.
+
+* Set a follow-up date.
+
+* Retry an eligible failed application.
+
+* Continue an incomplete application.
+
+* Archive or delete the record, if permitted.
+
+* Return to Application Tracker.
+
+EDGE STATES:
+
+* Loading: Show application-detail skeletons.
+
+* Empty: Show not found when the application ID is invalid or inaccessible.
+
+* Error: Display load or update failures and Retry.
+
+* Success: Display the application record and chronological events.
+
+* No history: Show the initial application event and explain that no additional events exist.
+
+* Deleted job: Preserve the application record while marking the original listing unavailable.
+
+* Concurrent update: Refresh the latest status and warn if the candidate's edit conflicts with another update.
+
+# 4. Profile & Settings
+
+## SCREEN 23 — Candidate Profile
+
+PURPOSE: Let candidates maintain the professional information used by the matching engine and application workflows.
+
+WHAT IT SHOWS:
+
+* Profile completeness indicator.
+
+* Candidate name and professional headline.
+
+* Contact information, subject to privacy settings.
+
+* Professional summary.
+
+* Total experience.
+
+* Employment history.
+
+* Skills.
+
+* Education.
+
+* Certifications.
+
+* Projects.
+
+* Industries.
+
+* Languages, if supported.
+
+* Portfolio, LinkedIn, GitHub, or personal website links.
+
+* Current resume association.
+
+* Last updated timestamp.
+
+* Edit Profile CTA.
+
+* Save Changes CTA.
+
+* Profile preview, if supported.
+
+WHAT THE USER CAN DO:
+
+* View profile information.
+
+* Edit professional details.
+
+* Add, edit, or remove skills.
+
+* Add, edit, or remove employment records.
+
+* Update education.
+
+* Add certifications and projects.
+
+* Update professional links.
+
+* Save changes.
+
+* Preview the profile.
+
+* Navigate to Resume Manager.
+
+* Review profile completeness.
+
+EDGE STATES:
+
+* Loading: Show profile skeletons.
+
+* Empty: Prompt the candidate to complete missing professional information.
+
+* Error: Display load or save failures and preserve unsaved changes where feasible.
+
+* Success: Save changes and update the profile timestamp and completeness indicator.
+
+* Validation failure: Highlight invalid fields and date ranges.
+
+* Profile in use: Warn if edits may affect existing match scores or future applications.
+
+## SCREEN 24 — Resume Manager
+
+PURPOSE: Allow candidates to upload, organize, edit, and select resume profiles within their permitted account or subscription limits.
+
+WHAT IT SHOWS:
+
+* Heading: Resume Manager.
+
+* Current resume count and maximum allowed count.
+
+* Resume list:
+
+  * Resume name.
+
+  * File type.
+
+  * File size.
+
+  * Upload date.
+
+  * Processing status.
+
+  * Associated profile.
+
+  * Default resume indicator.
+
+* Upload Resume CTA.
+
+* Supported file formats and size limits.
+
+* Resume preview or download control, if supported.
+
+* Rename control.
+
+* Set as Default control.
+
+* Replace Resume control.
+
+* Delete Resume control.
+
+* Processing status and error details.
+
+* Usage or plan-limit notice.
+
+WHAT THE USER CAN DO:
+
+* Upload a resume.
+
+* View resume details.
+
+* Preview or download a resume.
+
+* Rename a resume.
+
+* Replace a resume.
+
+* Set a default resume.
+
+* Select a resume for an application.
+
+* Delete a resume.
+
+* Retry failed processing.
+
+* Navigate to the associated profile.
+
+* Review resume limits.
+
+EDGE STATES:
+
+* Loading: Show resume-list skeletons and per-file processing indicators.
+
+* Empty: Prompt the candidate to upload their first resume.
+
+* Error: Display upload, processing, preview, or deletion failures.
+
+* Success: Show the updated resume list and selected default.
+
+* Limit reached: Disable additional uploads and explain the applicable limit.
+
+* Processing: Disable actions that require extracted data until processing finishes.
+
+* Delete blocked: Explain when a resume cannot be deleted because it is required by a pending workflow; allow replacement or reassignment where supported.
+
+* Default deletion: Require the candidate to choose another default before completing deletion.
+
+## SCREEN 25 — Job Preferences
+
+PURPOSE: Provide an editable settings page for the job-search criteria used to discover and filter relevant opportunities.
+
+WHAT IT SHOWS:
+
+* Target job titles.
+
+* Preferred skills or keywords.
+
+* Preferred industries.
+
+* Locations.
+
+* Work modes.
+
+* Experience range.
+
+* Employment types.
+
+* Salary range and currency, if supported.
+
+* Relocation preference, if supported.
+
+* Excluded companies or keywords, if supported.
+
+* Search frequency, if configurable.
+
+* Last updated timestamp.
+
+* Save Changes CTA.
+
+* Reset Preferences CTA.
+
+WHAT THE USER CAN DO:
+
+* Add or remove job titles.
+
+* Add or remove locations.
+
+* Edit experience range.
+
+* Select work modes.
+
+* Choose employment types.
+
+* Edit salary expectations.
+
+* Change relocation preferences.
+
+* Add or remove excluded companies and keywords.
+
+* Change search frequency where supported.
+
+* Save changes.
+
+* Reset preferences.
+
+* Review the impact on future job discovery.
+
+EDGE STATES:
+
+* Loading: Retrieve saved preferences and suggestion data.
+
+* Empty: Show existing defaults or prompt for a target role.
+
+* Error: Display invalid values, failed suggestions, or failed saves.
+
+* Success: Save preferences and indicate when they will affect future searches.
+
+* Invalid range: Prevent inconsistent experience or salary values.
+
+* Unsaved changes: Warn before leaving the screen.
+
+* No immediate refresh: Explain if existing matches will not be recalculated until the next search.
+
+## SCREEN 26 — Automation Settings
+
+PURPOSE: Let candidates control permitted application automation, eligibility thresholds, execution limits, and safety conditions.
+
+WHAT IT SHOWS:
+
+* Current automation status:
+
+  * Enabled.
+
+  * Disabled.
+
+  * Paused.
+
+  * Unavailable.
+
+* Application mode:
+
+  * Manual.
+
+  * Assisted.
+
+  * Automated, if supported.
+
+* Minimum match score.
+
+* Daily and weekly application limits, where supported.
+
+* Remaining quota.
+
+* Confirmation requirements.
+
+* Supported application methods.
+
+* Source-specific restrictions.
+
+* Pause-on-error setting.
+
+* Pause-on-missing-information setting.
+
+* Automation schedule, if supported.
+
+* Last execution timestamp.
+
+* Last failure and reason.
+
+* Consent status.
+
+* Save Settings CTA.
+
+* Enable, Pause, and Resume controls.
+
+* Automation activity link.
+
+WHAT THE USER CAN DO:
+
+* Enable or disable permitted automation.
+
+* Pause or resume automation.
+
+* Change application mode.
+
+* Set a match threshold.
+
+* Adjust limits within the plan allowance.
+
+* Configure confirmation behavior.
+
+* Choose permitted execution schedules.
+
+* Review source restrictions.
+
+* Save settings.
+
+* Open Application Activity Log.
+
+* Review the latest automation result.
+
+EDGE STATES:
+
+* Loading: Retrieve settings, eligibility, plan limits, and automation status.
+
+* Empty: Use safe defaults with automation disabled.
+
+* Error: Display save failures, eligibility-check failures, or unavailable automation services.
+
+* Success: Persist settings and show the effective configuration.
+
+* Quota exhausted: Prevent further submissions until the quota resets or an eligible plan change occurs.
+
+* Automation unavailable: Explain the specific restriction and disable unsupported controls.
+
+* Pause requested: Show a pending pause state until the backend confirms it.
+
+* In-flight application: Explain whether pausing affects queued, in-progress, or future submissions.
+
+* Consent revoked: Immediately prevent new automated submissions and reflect the disabled state.
+
+## SCREEN 27 — Notification Settings
+
+PURPOSE: Allow candidates to configure which job, application, automation, and account notifications they receive and through which channels.
+
+WHAT IT SHOWS:
+
+* Notification channel sections:
+
+  * Email.
+
+  * In-app.
+
+  * Other channels, only if supported.
+
+* Notification categories:
+
+  * New job matches.
+
+  * Strong matches.
+
+  * Application submitted.
+
+  * Application failure.
+
+  * Action required.
+
+  * Interview or offer updates, if tracked.
+
+  * Daily or weekly digest.
+
+  * Security and account alerts.
+
+* Per-category enable/disable controls.
+
+* Digest frequency.
+
+* Delivery time and timezone, if supported.
+
+* Email address and verification status.
+
+* Quiet hours, if supported.
+
+* Save Changes CTA.
+
+* Send Test Notification control, if supported.
+
+WHAT THE USER CAN DO:
+
+* Enable or disable notification categories.
+
+* Choose available delivery channels.
+
+* Set digest frequency.
+
+* Configure delivery time and timezone.
+
+* Set quiet hours.
+
+* Send a test notification.
+
+* Save changes.
+
+* Review notification delivery status.
+
+EDGE STATES:
+
+* Loading: Retrieve saved preferences and channel availability.
+
+* Empty: Show default notification preferences.
+
+* Error: Display save failures, invalid schedules, or unavailable delivery channels.
+
+* Success: Save preferences and confirm the effective configuration.
+
+* Unverified email: Explain that email notifications may require verification.
+
+* Channel unavailable: Disable unsupported channels and explain why.
+
+* Delivery failure: Show the latest failure when available and offer supported remediation.
+
+* Critical alerts: Clearly distinguish mandatory security communications from optional marketing or digest settings.
+
+## SCREEN 28 — Subscription & Usage
+
+PURPOSE: Show the candidate's subscription, current usage, plan restrictions, renewal details, and available subscription-management actions.
+
+WHAT IT SHOWS:
+
+* Current plan name.
+
+* Subscription status.
+
+* Billing cycle.
+
+* Start date and renewal/expiry date, where applicable.
+
+* Current usage cards:
+
+  * Resume profiles.
+
+  * Job searches or discoveries.
+
+  * Application attempts/submissions.
+
+  * Automation usage.
+
+  * Other metered features.
+
+* Used, remaining, and total allowance for each applicable quota.
+
+* Usage reset date.
+
+* Plan feature comparison.
+
+* Upgrade CTA.
+
+* Manage Subscription CTA.
+
+* Billing history or invoices, if supported.
+
+* Payment status.
+
+* Cancellation and renewal information.
+
+* Plan-specific restrictions.
+
+WHAT THE USER CAN DO:
+
+* Review the current plan.
+
+* Review usage and limits.
+
+* Compare available plans.
+
+* Upgrade or change plans.
+
+* Manage renewal settings.
+
+* Cancel a subscription, if supported.
+
+* View billing history.
+
+* Download invoices, if supported.
+
+* Retry an eligible failed payment.
+
+* Review quota-reset dates.
+
+EDGE STATES:
+
+* Loading: Retrieve subscription, billing, and usage information.
+
+* Empty: Display the Free or unsubscribed state with available plan options.
+
+* Error: Display billing-service failures and Retry; avoid showing stale data as current.
+
+* Success: Display the confirmed plan and latest usage.
+
+* Payment pending: Show the pending payment state without prematurely granting entitlements.
+
+* Payment failed: Explain the issue and provide the supported payment-recovery action.
+
+* Cancelled: Show the effective cancellation date and remaining access.
+
+* Quota exhausted: Explain which features are restricted and when limits reset.
+
+* Billing unavailable: Preserve account access and provide a support path.
+
+## SCREEN 29 — Account Settings
+
+PURPOSE: Let candidates manage their account identity, authentication credentials, security options, and account lifecycle.
+
+WHAT IT SHOWS:
+
+* Account information:
+
+  * Full name.
+
+  * Email address.
+
+  * Email verification status.
+
+* Edit Profile Information CTA.
+
+* Change Email section.
+
+* Change Password section.
+
+* Active sessions/devices, if supported.
+
+* Two-factor authentication settings, if supported.
+
+* Connected identity providers, if supported.
+
+* Sign out button.
+
+* Sign out all devices button, if supported.
+
+* Account deletion section.
+
+* Data export request, if supported.
+
+* Privacy and security links.
+
+WHAT THE USER CAN DO:
+
+* Update their name.
+
+* Change their email address.
+
+* Verify a new email address.
+
+* Change their password.
+
+* Enable or disable supported two-factor authentication.
+
+* Review and revoke active sessions, if supported.
+
+* Connect or disconnect supported identity providers.
+
+* Sign out.
+
+* Sign out of all devices.
+
+* Request a data export, if supported.
+
+* Request account deletion.
+
+EDGE STATES:
+
+* Loading: Retrieve account information and security status.
+
+* Empty: Show missing optional account fields.
+
+* Error: Display validation, authentication, or save failures.
+
+* Success: Save changes and show the updated account details.
+
+* Email change pending: Display the pending verification state.
+
+* Password change: Require the configured re-authentication or verification step.
+
+* Deletion requested: Show a confirmation and the effective deletion timeline.
+
+* Deletion failure: Preserve the account and show a retry or support path.
+
+* Session revoked: Redirect to Login when the current session is invalidated.
+
+# 5. Power-user / System Screens
+
+## SCREEN 30 — Job Source Status
+
+PURPOSE: Show the operational status of supported job sources so candidates understand where opportunities are being discovered and why a source may be unavailable.
+
+WHAT IT SHOWS:
+
+* Heading: Job Source Status.
+
+* Overall discovery status.
+
+* Source list:
+
+  * Source name.
+
+  * Source type.
+
+  * Availability status.
+
+  * Last successful check.
+
+  * Last successful discovery.
+
+  * Last error, if available.
+
+  * Number of jobs discovered, where available.
+
+* Status indicators:
+
+  * Active.
+
+  * Degraded.
+
+  * Temporarily unavailable.
+
+  * Disabled.
+
+  * Authentication required.
+
+* Source-specific notes.
+
+* Last refresh timestamp.
+
+* Refresh Status CTA.
+
+* Source details link, if supported.
+
+* Help or troubleshooting link.
+
+WHAT THE USER CAN DO:
+
+* View source availability.
+
+* Refresh source status.
+
+* Inspect source details.
+
+* Review the latest source error.
+
+* Open troubleshooting guidance.
+
+* Review jobs from available sources.
+
+* Contact support.
+
+EDGE STATES:
+
+* Loading: Show source-list skeletons.
+
+* Empty: Explain when no sources are configured or enabled for the account.
+
+* Error: Display source-status retrieval failure and Retry.
+
+* Success: Show the latest available source statuses.
+
+* Partial data: Display known statuses and mark unavailable checks as unknown.
+
+* Stale status: Show the last checked time and offer refresh.
+
+* Authentication required: Explain the required action without exposing credentials.
+
+* Source disabled: Distinguish intentional disablement from an outage.
+
+## SCREEN 31 — Application Activity Log
+
+PURPOSE: Provide an auditable chronological record of application-related system actions, automation events, and failures.
+
+WHAT IT SHOWS:
+
+* Heading: Application Activity Log.
+
+* Date-range filter.
+
+* Search input.
+
+* Filters:
+
+  * Event type.
+
+  * Application.
+
+  * Job.
+
+  * Outcome.
+
+  * Automation/manual action.
+
+* Activity table:
+
+  * Timestamp with timezone.
+
+  * Event name.
+
+  * Related job.
+
+  * Related application.
+
+  * Action initiator.
+
+  * Result.
+
+  * Error code, if available.
+
+  * Details link.
+
+* Event details panel:
+
+  * Event description.
+
+  * Relevant metadata.
+
+  * Failure reason.
+
+  * Correlation or reference ID.
+
+* Pagination.
+
+* Export control, if supported.
+
+WHAT THE USER CAN DO:
+
+* Browse activity events.
+
+* Search the log.
+
+* Filter by event type, date, job, or outcome.
+
+* Sort events chronologically.
+
+* Open event details.
+
+* Navigate to the related application.
+
+* Copy a reference ID.
+
+* Export permitted log data.
+
+* Refresh the log.
+
+EDGE STATES:
+
+* Loading: Show table skeletons.
+
+* Empty: Explain that no activity has been recorded in the selected period.
+
+* Error: Display retrieval failure and Retry.
+
+* Success: Show chronological events with timestamps and outcomes.
+
+* Large result set: Paginate results and use server-side filtering.
+
+* Redacted data: Hide passwords, tokens, sensitive credentials, and unnecessary personal information.
+
+* Event unavailable: Preserve the log entry and show that additional details cannot be retrieved.
+
+* Export failure: Display the error and allow retry.
+
+## SCREEN 32 — Notifications Center
+
+PURPOSE: Provide a centralized inbox where candidates can review, filter, and act on job, application, automation, and account notifications.
+
+WHAT IT SHOWS:
+
+* Heading: Notifications.
+
+* Unread count.
+
+* Tabs or filters:
+
+  * All.
+
+  * Unread.
+
+  * Jobs.
+
+  * Applications.
+
+  * Action Required.
+
+  * System.
+
+* Notification list:
+
+  * Title.
+
+  * Message.
+
+  * Category icon.
+
+  * Timestamp.
+
+  * Read/unread indicator.
+
+  * Related job or application.
+
+  * Action CTA, where applicable.
+
+* Mark All as Read button.
+
+* Individual Mark as Read action.
+
+* Delete/dismiss action, if supported.
+
+* Pagination or infinite scroll.
+
+* Notification Settings link.
+
+WHAT THE USER CAN DO:
+
+* View notifications.
+
+* Filter by category.
+
+* View unread notifications.
+
+* Open a related job or application.
+
+* Mark an individual notification as read.
+
+* Mark all notifications as read.
+
+* Dismiss or delete notifications, if supported.
+
+* Navigate to Notification Settings.
+
+* Load older notifications.
+
+EDGE STATES:
+
+* Loading: Show notification skeletons.
+
+* Empty: Display a message appropriate to the selected filter, such as no unread notifications.
+
+* Error: Display retrieval or update failure and Retry.
+
+* Success: Show notifications with accurate read states and unread count.
+
+* Stale count: Refresh the unread count after actions and server updates.
+
+* Related record unavailable: Keep the notification visible and explain that its linked item is no longer available.
+
+* Duplicate event: Avoid duplicate display when the backend provides a stable notification identity.
+
+## SCREEN 33 — Help / Support
+
+PURPOSE: Help candidates resolve common product issues and contact support when self-service guidance is insufficient.
+
+WHAT IT SHOWS:
+
+* Heading: Help & Support.
+
+* Searchable FAQ input.
+
+* FAQ categories:
+
+  * Account and login.
+
+  * Resume upload and parsing.
+
+  * Job matching.
+
+  * Application tracking.
+
+  * Automation.
+
+  * Subscription and billing.
+
+  * Privacy and security.
+
+* FAQ list with expandable answers.
+
+* Getting-started guides.
+
+* Troubleshooting articles.
+
+* Contact Support section:
+
+  * Subject.
+
+  * Issue category.
+
+  * Related job/application, if applicable.
+
+  * Description.
+
+  * Attachment upload, if supported.
+
+  * Email/contact details where necessary.
+
+  * Submit Ticket CTA.
+
+* Support ticket reference and status, if ticket tracking is supported.
+
+* Links to Terms, Privacy Policy, and product status.
+
+WHAT THE USER CAN DO:
+
+* Search FAQs.
+
+* Browse help categories.
+
+* Expand and collapse answers.
+
+* Open help articles.
+
+* Submit a support request.
+
+* Select an issue category.
+
+* Link a relevant job or application.
+
+* Attach supported files.
+
+* Review the submitted ticket reference.
+
+* View ticket status, if supported.
+
+* Open legal and privacy pages.
+
+EDGE STATES:
+
+* Loading: Show FAQ skeletons and support-form initialization status.
+
+* Empty: Display a no-articles-found message and offer contact support.
+
+* Error: Display FAQ retrieval or ticket-submission failure and Retry.
+
+* Success: Show the answer or article, or confirm ticket submission with a reference ID.
+
+* Invalid form: Highlight missing subject, description, or required contact details.
+
+* Attachment failure: Explain unsupported format or size and allow replacement.
+
+* Support unavailable: Display alternative contact information or a service-unavailable message.
+
+* Duplicate submission: Prevent accidental duplicate tickets while a submission is in progress.
+
+# Cross-screen implementation requirements
+
+These requirements apply across the 33 screens and should be treated as shared development rules rather than implemented separately on each page.
+
+## A. Global application shell
+
+* Use a consistent typography system, spacing scale, color tokens, and component library.
+
+* Provide a shared authenticated navigation shell.
+
+* Show the candidate's account menu and notification access.
+
+* Keep the active navigation item highlighted.
+
+* Support responsive desktop, tablet, and mobile layouts.
+
+* Provide breadcrumbs on nested screens.
+
+* Use consistent button variants for primary, secondary, destructive, and disabled actions.
+
+* Use consistent status badges and icons.
+
+* Display user-friendly error messages.
+
+* Provide accessible labels, keyboard navigation, focus indicators, and appropriate contrast.
+
+* Confirm destructive actions before execution.
+
+* Warn users before discarding unsaved changes.
+
+## B. Routing and access control
+
+* Protect authenticated routes.
+
+* Redirect unauthenticated users to Login.
+
+* Preserve the intended destination after login when appropriate.
+
+* Route users with incomplete onboarding to the next required onboarding step.
+
+* Enforce account ownership for resumes, profiles, jobs, applications, and logs.
+
+* Handle invalid IDs and deleted resources gracefully.
+
+* Revalidate permissions and entitlements on the backend.
+
+* Do not treat hidden or disabled UI controls as a substitute for backend authorization.
+
+## C. Shared components
+
+Build reusable components for:
+
+* App header and navigation.
+
+* Sidebar and mobile navigation.
+
+* Page header and breadcrumbs.
+
+* Primary and secondary buttons.
+
+* Form fields and validation messages.
+
+* Search inputs and filter panels.
+
+* Job cards.
+
+* Match-score indicators.
+
+* Skill chips.
+
+* Status badges.
+
+* Data tables.
+
+* Pagination.
+
+* Empty states.
+
+* Loading skeletons.
+
+* Error panels.
+
+* Confirmation dialogs.
+
+* Toast notifications.
+
+* File upload and progress.
+
+* Timeline and activity events.
+
+* Subscription usage meters.
+
+* Notification items.
+
+## D. Application automation guardrails
+
+* Never submit an application without the required candidate authorization.
+
+* Respect source-specific restrictions and supported application methods.
+
+* Do not fabricate candidate answers, experience, skills, or qualifications.
+
+* Pause workflows when required fields cannot be completed reliably.
+
+* Prevent duplicate submissions where possible.
+
+* Treat uncertain submission outcomes as pending until verified.
+
+* Record submission attempts and their outcomes.
+
+* Respect configured usage limits and subscription entitlements.
+
+* Allow candidates to pause or disable future automation.
+
+* Clearly distinguish a submission attempt from confirmed employer receipt.
+
+* Do not expose credentials, session tokens, or sensitive application data in UI logs.
+
+## E. Data and status consistency
+
+* Use backend-defined status enums rather than inventing independent labels in individual screens.
+
+* Store and display timestamps consistently, including timezone handling.
+
+* Show when data was last refreshed if freshness matters.
+
+* Preserve application history when a job listing expires or disappears.
+
+* Keep match scores associated with the profile and job versions used to calculate them.
+
+* Distinguish user-reported application statuses from externally verified statuses.
+
+* Make retry operations idempotent where possible.
+
+* Use server-side filtering, sorting, and pagination for large datasets.
+
+* Avoid displaying fabricated counts, percentages, or processing progress.
+
+## F. Required shared status vocabulary
+
+Use a consistent vocabulary throughout the application. The final values should match the backend schema.
+
+|
+Entity
+
+|
+
+Suggested statuses
+
+|
+| --- | --- |
+|
+
+Resume
+
+|
+
+Uploaded, Processing, Ready, Failed
+
+|
+|
+
+Job
+
+|
+
+Open, Closed, Expired, Unknown
+
+|
+|
+
+Automation
+
+|
+
+Enabled, Paused, Disabled, Unavailable
+
+|
+|
+
+Application
+
+|
+
+Draft, Pending, Submitted, Action Required, Failed, Withdrawn
+
+|
+|
+
+Notification
+
+|
+
+Unread, Read
+
+|
+|
+
+Subscription
+
+|
+
+Active, Trial, Past Due, Cancelled, Expired
+
+|
+|
+
+Job source
+
+|
+
+Active, Degraded, Unavailable, Disabled, Authentication Required
+
+|
+
+These values are a proposed UI vocabulary. Codex should map them to the actual backend contract rather than assume they are already implemented.
+
+# Codex implementation handoff
+
+The screen list defines the UI scope, but a production-ready codebase also needs a concrete technical contract. Use the following implementation order to reduce rework.
+
+Phase 1 — Foundation
+
+Design tokens, app shell, routing, authentication, shared components, responsive layouts, and global error handling.
+
+Phase 2 — Authentication & onboarding
+
+Screens 1–13, including resume upload, profile review, preferences, and first matching results.
+
+Phase 3 — Job discovery & applications
+
+Screens 14–22, including match analysis, confirmation, submission status, and application history.
+
+Phase 4 — Profile & settings
+
+Screens 23–29, including resume management, automation controls, notifications, and subscription usage.
+
+Phase 5 — System screens & QA
+
+Screens 30–33, followed by permission checks, edge-state testing, responsive testing, and end-to-end validation.
+
+Important for Codex: Implement all 33 screens, but do not invent backend endpoints, database fields, third-party integrations, or automation capabilities. Where the backend contract is not yet defined, isolate the dependency behind a typed service interface and use clearly labeled mock data only in development mode. Keep the UI states and navigation functional while preserving the boundary between mocked behavior and real production operations.

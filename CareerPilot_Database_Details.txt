@@ -1,0 +1,2722 @@
+# Production Database Architecture — AI Job Search & Application Automation Platform
+
+Based on your 33-screen UI plan and the earlier MVP direction, I recommend Supabase with PostgreSQL as the primary database, Supabase Auth for identity, and Supabase Storage for resumes.
+
+The database should support the complete candidate journey: account creation → resume parsing → profile review → job discovery → AI matching → application confirmation → submission tracking → automation monitoring → subscription and usage management.
+
+The key architectural decision is to keep candidate data, job-source data, AI-generated analysis, and application execution records separate, while connecting them through stable UUIDs and foreign keys. This gives you a maintainable MVP without sacrificing the ability to scale.
+
+Recommended stack
+
+## Supabase + PostgreSQL
+
+A relational database with native transactions, JSONB, full-text search, row-level security, and optional vector search.
+
+PostgreSQL
+
+Source of truth for users, resumes, jobs, matches, applications, subscriptions, and audit records.
+
+Supabase Auth + RLS
+
+Authentication and database-level isolation of each candidate's private data.
+
+Supabase Storage
+
+Private resume files, with database records storing storage paths rather than public URLs.
+
+Server-side functions + worker queue
+
+Resume processing, AI matching, scheduled discovery, application execution, retries, and webhooks.
+
+## 1. Database design principles
+
+1. PostgreSQL is the system of record. Do not use a separate NoSQL database for the core application entities.
+
+2. Supabase Auth owns authentication. Reference `auth.users`; do not duplicate password hashes or create a second authentication system.
+
+3. Private candidate data is user-scoped. A candidate must never be able to read or modify another candidate's resumes, matches, applications, or settings.
+
+4. Jobs are shared data. Store a canonical job once, rather than duplicating the same job for every candidate who matches it.
+
+5. Matches are candidate-specific. Store each candidate-job score and its explainable analysis separately.
+
+6. Applications are durable records. Preserve application history even if a job expires or disappears from its source.
+
+7. Automation is auditable. Record consent, attempts, state changes, failures, and external confirmation evidence.
+
+8. AI output is versioned. Preserve the model, prompt version, input references, and output needed to explain a result.
+
+9. Usage is measurable. Use append-only usage events for metering, with subscription limits enforced server-side.
+
+10. Files stay outside the relational database. Store resume binaries in a private Storage bucket and keep their metadata in PostgreSQL.
+
+The schema below assumes a single-candidate account model for the MVP, one or more resume profiles per candidate within plan limits, shared job listings, and application automation that can be paused, restricted, or unavailable.
+
+
+# 2. Complete database schema
+
+## 2.1 Entity relationship overview
+
+auth.users
+
+Supabase-managed identity
+
+candidate_profiles · user_preferences
+
+Candidate identity, resume profiles, settings
+
+Resumes
+
+Files, parsing, extracted data, skills
+
+Jobs
+
+Sources, companies, requirements
+
+Job matches
+
+Candidate + job + score + analysis version
+
+Applications
+
+Application records, attempts, events, consent
+
+Automation
+
+Settings, queues, execution history
+
+Billing & notifications
+
+Plans, usage, alerts
+
+## 2.2 SQL conventions
+
+* UUID primary keys use `gen_random_uuid()`.
+
+* Timestamps are stored in UTC using `timestamptz`.
+
+* `created_at` and `updated_at` are maintained consistently.
+
+* Monetary values use integer minor units (for example, paise for INR) rather than floating-point values.
+
+* Scores use `numeric`, not floating-point types, where predictable decimal storage matters.
+
+* JSONB is reserved for variable or versioned AI payloads, external metadata, and provider-specific data.
+
+* Foreign keys use restrictive deletion by default for records that must preserve history.
+
+* Cascading deletion is used for dependent, user-owned records where appropriate.
+
+* The SQL targets a Supabase PostgreSQL deployment. Run it through migrations in a development project first.
+
+## 2.3 Extensions, enums, and common trigger
+
+SQL
+
+```
+-- ============================================================
+-- 00. EXTENSIONS
+-- ============================================================
+
+create extension if not exists pgcrypto;
+create extension if not exists citext;
+
+-- Optional, only if semantic/vector search is required:
+-- create extension if not exists vector;
+
+-- ============================================================
+-- 01. ENUM TYPES
+-- ============================================================
+
+create type public.resume_status as enum (
+  'uploaded',
+  'processing',
+  'ready',
+  'failed',
+  'deleted'
+);
+
+create type public.job_status as enum (
+  'open',
+  'closed',
+  'expired',
+  'unknown'
+);
+
+create type public.application_mode as enum (
+  'manual',
+  'assisted',
+  'automated'
+);
+
+create type public.automation_status as enum (
+  'enabled',
+  'paused',
+  'disabled',
+  'unavailable'
+);
+
+create type public.application_status as enum (
+  'draft',
+  'awaiting_confirmation',
+  'queued',
+  'in_progress',
+  'submitted',
+  'action_required',
+  'failed',
+  'withdrawn',
+  'rejected',
+  'interview',
+  'offer',
+  'hired'
+);
+
+create type public.application_method as enum (
+  'manual',
+  'assisted',
+  'automated',
+  'external'
+);
+
+create type public.application_attempt_status as enum (
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'outcome_unknown',
+  'cancelled'
+);
+
+create type public.source_status as enum (
+  'active',
+  'degraded',
+  'unavailable',
+  'disabled',
+  'authentication_required'
+);
+
+create type public.notification_channel as enum (
+  'in_app',
+  'email'
+);
+
+create type public.subscription_status as enum (
+  'trialing',
+  'active',
+  'past_due',
+  'cancelled',
+  'expired',
+  'incomplete'
+);
+
+create type public.usage_event_type as enum (
+  'resume_processed',
+  'job_search',
+  'ai_match',
+  'application_attempt',
+  'application_submitted',
+  'ai_generation'
+);
+
+create type public.consent_type as enum (
+  'automated_application',
+  'data_processing',
+  'marketing'
+);
+
+-- ============================================================
+-- 02. COMMON updated_at TRIGGER
+-- ============================================================
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+```
+
+## 2.4 Candidate identity and profile tables
+
+### Table 1 — `candidate_profiles`
+
+One candidate profile per Supabase Auth user.
+
+SQL
+
+```
+create table public.candidate_profiles (
+  user_id uuid primary key
+    references auth.users(id) on delete cascade,
+
+  full_name text not null,
+  professional_headline text,
+  email citext,
+  phone text,
+  professional_summary text,
+
+  total_experience_months integer
+    check (total_experience_months >= 0),
+
+  current_location text,
+  linkedin_url text,
+  github_url text,
+  portfolio_url text,
+
+  onboarding_completed boolean not null default false,
+  onboarding_step smallint not null default 1
+    check (onboarding_step between 1 and 3),
+
+  profile_completeness numeric(5,2) not null default 0
+    check (profile_completeness between 0 and 100),
+
+  is_active boolean not null default true,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.candidate_profiles is
+  'Candidate-owned professional profile; authentication remains in Supabase Auth.';
+```
+
+### Table 2 — `candidate_experiences`
+
+SQL
+
+```
+create table public.candidate_experiences (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  company_name text not null,
+  job_title text not null,
+  employment_type text,
+  location text,
+  description text,
+
+  start_date date,
+  end_date date,
+  is_current boolean not null default false,
+
+  source_resume_id uuid, -- FK added after resumes table exists
+
+  display_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  check (end_date is null or start_date is null
+         or end_date >= start_date),
+  check (not is_current or end_date is null)
+);
+```
+
+### Table 3 — `candidate_education`
+
+SQL
+
+```
+create table public.candidate_education (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  institution_name text not null,
+  qualification text,
+  field_of_study text,
+  graduation_year smallint,
+  start_date date,
+  end_date date,
+  grade text,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+### Table 4 — `candidate_certifications`
+
+SQL
+
+```
+create table public.candidate_certifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  name text not null,
+  issuing_organization text,
+  credential_id text,
+  credential_url text,
+  issued_at date,
+  expires_at date,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+### Table 5 — `skills`
+
+A normalized skill dictionary shared by candidates and jobs.
+
+SQL
+
+```
+create table public.skills (
+  id uuid primary key default gen_random_uuid(),
+
+  canonical_name citext not null unique,
+  category text,
+  description text,
+  aliases text[] not null default '{}',
+
+  created_at timestamptz not null default now()
+);
+```
+
+### Table 6 — `candidate_skills`
+
+SQL
+
+```
+create table public.candidate_skills (
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  skill_id uuid not null
+    references public.skills(id) on delete restrict,
+
+  proficiency_level text,
+  years_experience numeric(5,2)
+    check (years_experience >= 0),
+
+  is_primary boolean not null default false,
+  evidence text,
+  source text not null default 'candidate',
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  primary key (user_id, skill_id)
+);
+```
+
+## 2.5 Resume and AI extraction tables
+
+### Table 7 — `resumes`
+
+The database stores the private Storage path, not the file bytes.
+
+SQL
+
+```
+create table public.resumes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  name text not null,
+  storage_bucket text not null default 'candidate-resumes',
+  storage_path text not null,
+
+  original_filename text not null,
+  mime_type text not null,
+  file_size_bytes bigint not null
+    check (file_size_bytes > 0),
+
+  file_sha256 text,
+  status public.resume_status not null default 'uploaded',
+  is_default boolean not null default false,
+
+  processing_error_code text,
+  processing_error_message text,
+  processed_at timestamptz,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (storage_bucket, storage_path),
+  unique (user_id, id)
+);
+
+comment on column public.resumes.storage_path is
+  'Private object path; never store a permanent public resume URL.';
+```
+
+### Table 8 — `resume_extractions`
+
+Retains versioned extraction output so the candidate can review and correct AI results.
+
+SQL
+
+```
+create table public.resume_extractions (
+  id uuid primary key default gen_random_uuid(),
+
+  resume_id uuid not null
+    references public.resumes(id) on delete cascade,
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  extraction_version integer not null default 1,
+  model_name text,
+  prompt_version text,
+
+  extracted_data jsonb not null default '{}'::jsonb,
+  confidence_data jsonb not null default '{}'::jsonb,
+
+  status text not null default 'completed'
+    check (status in ('pending', 'completed', 'failed')),
+
+  error_details jsonb,
+  created_at timestamptz not null default now(),
+
+  unique (resume_id, extraction_version),
+  unique (user_id, id)
+);
+```
+
+### Table 9 — `resume_profile_snapshots`
+
+Stores the candidate-approved profile state derived from a resume.
+
+SQL
+
+```
+create table public.resume_profile_snapshots (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  resume_id uuid not null
+    references public.resumes(id) on delete restrict,
+
+  extraction_id uuid
+    references public.resume_extractions(id) on delete set null,
+
+  profile_data jsonb not null,
+  approved_at timestamptz,
+  created_at timestamptz not null default now(),
+
+  unique (user_id, id)
+);
+
+alter table public.candidate_experiences
+  add constraint candidate_experiences_source_resume_fk
+  foreign key (user_id, source_resume_id)
+  references public.resumes(user_id, id)
+  on delete set null;
+
+-- The composite FK above enforces resume ownership.
+-- If using ON DELETE SET NULL with a composite FK, PostgreSQL
+-- will also attempt to null user_id. Prefer a single-column
+-- resume FK or a column-specific SET NULL action on PG versions
+-- that support it. See correction below.
+```
+
+Implementation note: Use the following safer definition for the experience-to-resume reference instead of the composite FK above if your migration tooling does not support column-specific `SET NULL`:
+
+SQL
+
+```
+-- Preferred simple alternative:
+-- source_resume_id references public.resumes(id) on delete set null
+-- Ownership is validated in the server-side write function.
+```
+
+## 2.6 Preferences and automation configuration
+
+### Table 10 — `job_preferences`
+
+SQL
+
+```
+create table public.job_preferences (
+  user_id uuid primary key
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  target_titles text[] not null default '{}',
+  preferred_keywords text[] not null default '{}',
+  preferred_industries text[] not null default '{}',
+  preferred_locations text[] not null default '{}',
+  excluded_companies text[] not null default '{}',
+  excluded_keywords text[] not null default '{}',
+
+  min_experience_months integer
+    check (min_experience_months >= 0),
+  max_experience_months integer
+    check (max_experience_months >= 0),
+
+  work_modes text[] not null default '{}',
+  employment_types text[] not null default '{}',
+
+  min_salary_minor bigint,
+  max_salary_minor bigint,
+  salary_currency char(3) not null default 'INR',
+
+  willing_to_relocate boolean not null default false,
+  search_frequency text not null default 'daily'
+    check (search_frequency in ('manual', 'daily', 'weekly')),
+
+  updated_at timestamptz not null default now(),
+
+  check (
+    max_experience_months is null
+    or min_experience_months is null
+    or max_experience_months >= min_experience_months
+  ),
+
+  check (
+    max_salary_minor is null
+    or min_salary_minor is null
+    or max_salary_minor >= min_salary_minor
+  )
+);
+```
+
+### Table 11 — `automation_settings`
+
+SQL
+
+```
+create table public.automation_settings (
+  user_id uuid primary key
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  status public.automation_status not null default 'disabled',
+  mode public.application_mode not null default 'manual',
+
+  minimum_match_score numeric(5,2) not null default 70
+    check (minimum_match_score between 0 and 100),
+
+  daily_application_limit integer not null default 5
+    check (daily_application_limit >= 0),
+
+  weekly_application_limit integer
+    check (weekly_application_limit is null
+           or weekly_application_limit >= 0),
+
+  require_confirmation boolean not null default true,
+  pause_on_error boolean not null default true,
+  pause_on_missing_information boolean not null default true,
+
+  schedule_timezone text not null default 'UTC',
+  schedule_config jsonb not null default '{}'::jsonb,
+
+  last_started_at timestamptz,
+  last_paused_at timestamptz,
+  pause_reason text,
+
+  updated_at timestamptz not null default now()
+);
+```
+
+### Table 12 — `notification_preferences`
+
+SQL
+
+```
+create table public.notification_preferences (
+  user_id uuid primary key
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  email_enabled boolean not null default true,
+  in_app_enabled boolean not null default true,
+
+  new_matches boolean not null default true,
+  strong_matches boolean not null default true,
+  application_updates boolean not null default true,
+  action_required boolean not null default true,
+  failure_alerts boolean not null default true,
+  weekly_digest boolean not null default false,
+
+  digest_frequency text not null default 'weekly'
+    check (digest_frequency in ('daily', 'weekly', 'never')),
+
+  timezone text not null default 'UTC',
+  quiet_hours jsonb not null default '{}'::jsonb,
+
+  updated_at timestamptz not null default now()
+);
+```
+
+
+## 2.7 Job sources, companies, and job listings
+
+### Table 13 — `job_sources`
+
+Stores supported source configuration and operational status. Provider credentials belong in a secrets manager, never in this table.
+
+SQL
+
+```
+create table public.job_sources (
+  id uuid primary key default gen_random_uuid(),
+
+  source_key text not null unique,
+  display_name text not null,
+  source_type text not null,
+  base_url text,
+
+  status public.source_status not null default 'active',
+  is_enabled boolean not null default true,
+
+  capabilities jsonb not null default '{}'::jsonb,
+  terms_url text,
+
+  last_checked_at timestamptz,
+  last_success_at timestamptz,
+  last_error_code text,
+  last_error_at timestamptz,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+comment on table public.job_sources is
+  'Admin-managed source registry. Credentials must not be stored here.';
+```
+
+### Table 14 — `companies`
+
+SQL
+
+```
+create table public.companies (
+  id uuid primary key default gen_random_uuid(),
+
+  canonical_name citext not null unique,
+  website_url text,
+  logo_url text,
+  description text,
+  industry text,
+  headquarters_location text,
+
+  external_identifiers jsonb not null default '{}'::jsonb,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+### Table 15 — `jobs`
+
+This is the canonical job record shared by all candidates.
+
+SQL
+
+```
+create table public.jobs (
+  id uuid primary key default gen_random_uuid(),
+
+  source_id uuid not null
+    references public.job_sources(id) on delete restrict,
+
+  company_id uuid
+    references public.companies(id) on delete set null,
+
+  source_job_id text,
+  canonical_url text,
+  application_url text,
+
+  title text not null,
+  company_name text not null,
+  location text,
+  work_mode text,
+  employment_type text,
+
+  min_experience_months integer,
+  max_experience_months integer,
+
+  min_salary_minor bigint,
+  max_salary_minor bigint,
+  salary_currency char(3),
+
+  description text,
+  requirements text[] not null default '{}',
+  preferred_qualifications text[] not null default '{}',
+
+  -- Searchable text; maintain via trigger or ingestion function.
+  search_document tsvector,
+
+  status public.job_status not null default 'unknown',
+  posted_at timestamptz,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  expires_at timestamptz,
+
+  source_payload jsonb not null default '{}'::jsonb,
+  content_hash text,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  check (
+    max_experience_months is null
+    or min_experience_months is null
+    or max_experience_months >= min_experience_months
+  ),
+
+  check (
+    max_salary_minor is null
+    or min_salary_minor is null
+    or max_salary_minor >= min_salary_minor
+  ),
+
+  unique (source_id, source_job_id)
+);
+
+comment on column public.jobs.source_payload is
+  'Store only necessary provider metadata; avoid unnecessary personal data.';
+```
+
+### Table 16 — `job_skills`
+
+SQL
+
+```
+create table public.job_skills (
+  job_id uuid not null
+    references public.jobs(id) on delete cascade,
+
+  skill_id uuid not null
+    references public.skills(id) on delete restrict,
+
+  requirement_type text not null default 'required'
+    check (requirement_type in ('required', 'preferred')),
+
+  importance numeric(5,2)
+    check (importance is null or importance between 0 and 100),
+
+  created_at timestamptz not null default now(),
+
+  primary key (job_id, skill_id, requirement_type)
+);
+```
+
+### Table 17 — `job_discovery_runs`
+
+SQL
+
+```
+create table public.job_discovery_runs (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid
+    references public.candidate_profiles(user_id) on delete set null,
+
+  source_id uuid
+    references public.job_sources(id) on delete set null,
+
+  trigger_type text not null
+    check (trigger_type in ('manual', 'scheduled', 'retry')),
+
+  status text not null default 'queued'
+    check (status in ('queued', 'running', 'completed', 'failed')),
+
+  started_at timestamptz,
+  completed_at timestamptz,
+
+  jobs_found integer not null default 0,
+  jobs_created integer not null default 0,
+  jobs_updated integer not null default 0,
+
+  error_code text,
+  error_details jsonb,
+
+  created_at timestamptz not null default now()
+);
+```
+
+## 2.8 Matching and AI execution
+
+### Table 18 — `ai_runs`
+
+A generic audit record for AI calls across resume parsing, matching, and other supported AI tasks.
+
+SQL
+
+```
+create table public.ai_runs (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid
+    references public.candidate_profiles(user_id) on delete set null,
+
+  task_type text not null
+    check (task_type in (
+      'resume_extraction',
+      'job_matching',
+      'job_parsing',
+      'application_assistance'
+    )),
+
+  model_provider text not null,
+  model_name text not null,
+  prompt_version text,
+
+  status text not null default 'queued'
+    check (status in ('queued', 'running', 'completed', 'failed')),
+
+  input_reference jsonb not null default '{}'::jsonb,
+  output_data jsonb,
+  error_code text,
+  error_details jsonb,
+
+  input_tokens integer,
+  output_tokens integer,
+  estimated_cost_minor bigint,
+
+  started_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+```
+
+### Table 19 — `match_runs`
+
+SQL
+
+```
+create table public.match_runs (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  preferences_snapshot jsonb not null,
+  profile_snapshot_id uuid
+    references public.resume_profile_snapshots(id) on delete set null,
+
+  algorithm_version text not null,
+  ai_run_id uuid
+    references public.ai_runs(id) on delete set null,
+
+  status text not null default 'queued'
+    check (status in ('queued', 'running', 'completed', 'failed')),
+
+  jobs_evaluated integer not null default 0,
+  matches_created integer not null default 0,
+
+  started_at timestamptz,
+  completed_at timestamptz,
+  error_details jsonb,
+
+  created_at timestamptz not null default now(),
+
+  unique (user_id, id)
+);
+```
+
+### Table 20 — `job_matches`
+
+A candidate-specific match record. A match is unique per candidate, job, and algorithm version.
+
+SQL
+
+```
+create table public.job_matches (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  job_id uuid not null
+    references public.jobs(id) on delete cascade,
+
+  match_run_id uuid
+    references public.match_runs(id) on delete set null,
+
+  algorithm_version text not null,
+
+  overall_score numeric(5,2) not null
+    check (overall_score between 0 and 100),
+
+  skills_score numeric(5,2)
+    check (skills_score is null or skills_score between 0 and 100),
+
+  experience_score numeric(5,2)
+    check (experience_score is null or experience_score between 0 and 100),
+
+  location_score numeric(5,2)
+    check (location_score is null or location_score between 0 and 100),
+
+  other_score numeric(5,2)
+    check (other_score is null or other_score between 0 and 100),
+
+  matched_skills jsonb not null default '[]'::jsonb,
+  missing_skills jsonb not null default '[]'::jsonb,
+  experience_analysis jsonb not null default '{}'::jsonb,
+  score_breakdown jsonb not null default '{}'::jsonb,
+
+  explanation text,
+
+  is_saved boolean not null default false,
+  is_dismissed boolean not null default false,
+  last_viewed_at timestamptz,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (user_id, job_id, algorithm_version),
+  unique (user_id, id)
+);
+```
+
+Important: If you want to preserve every recalculation, keep each algorithm version as a separate row, as above. The UI should select the latest applicable version rather than overwriting historical analysis.
+
+## 2.9 Application lifecycle
+
+### Table 21 — `applications`
+
+One logical application per candidate-job pair. Multiple attempts belong to this record.
+
+SQL
+
+```
+create table public.applications (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  job_id uuid not null
+    references public.jobs(id) on delete restrict,
+
+  match_id uuid
+    references public.job_matches(id) on delete set null,
+
+  resume_id uuid
+    references public.resumes(id) on delete set null,
+
+  status public.application_status not null default 'draft',
+  method public.application_method not null default 'manual',
+
+  external_application_id text,
+  external_confirmation_reference text,
+
+  applied_at timestamptz,
+  last_status_checked_at timestamptz,
+
+  candidate_reported_status boolean not null default false,
+  outcome_verified boolean not null default false,
+
+  notes text,
+  follow_up_at timestamptz,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  unique (user_id, job_id),
+  unique (user_id, id)
+);
+```
+
+### Table 22 — `application_consents`
+
+Stores explicit consent for an application action. Consent is separate from the application record so that the authorization history is retained.
+
+SQL
+
+```
+create table public.application_consents (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  application_id uuid not null
+    references public.applications(id) on delete cascade,
+
+  consent_type public.consent_type not null,
+
+  consent_version text not null,
+  consent_text_hash text not null,
+
+  granted_at timestamptz,
+  revoked_at timestamptz,
+
+  context jsonb not null default '{}'::jsonb,
+
+  created_at timestamptz not null default now(),
+
+  unique (user_id, id)
+);
+```
+
+### Table 23 — `application_attempts`
+
+Every external or automated submission attempt gets its own row.
+
+SQL
+
+```
+create table public.application_attempts (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  application_id uuid not null
+    references public.applications(id) on delete cascade,
+
+  consent_id uuid
+    references public.application_consents(id) on delete set null,
+
+  attempt_number integer not null
+    check (attempt_number > 0),
+
+  status public.application_attempt_status not null default 'queued',
+
+  idempotency_key text not null unique,
+
+  worker_reference text,
+  external_reference text,
+
+  started_at timestamptz,
+  completed_at timestamptz,
+
+  error_code text,
+  error_message text,
+
+  result_metadata jsonb not null default '{}'::jsonb,
+
+  created_at timestamptz not null default now(),
+
+  unique (application_id, attempt_number),
+  unique (user_id, id)
+);
+```
+
+### Table 24 — `application_events`
+
+Append-only application history used by the Application Detail and Activity Log screens.
+
+SQL
+
+```
+create table public.application_events (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  application_id uuid not null
+    references public.applications(id) on delete cascade,
+
+  attempt_id uuid
+    references public.application_attempts(id) on delete set null,
+
+  event_type text not null,
+  previous_status public.application_status,
+  new_status public.application_status,
+
+  actor_type text not null
+    check (actor_type in ('candidate', 'system', 'worker', 'provider')),
+
+  description text,
+  metadata jsonb not null default '{}'::jsonb,
+
+  occurred_at timestamptz not null default now()
+);
+```
+
+### Table 25 — `automation_jobs`
+
+Persistent queue for application and discovery work. This is a database-backed queue, not a replacement for a dedicated high-throughput queue if workload demands one.
+
+SQL
+
+```
+create table public.automation_jobs (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid
+    references public.candidate_profiles(user_id) on delete set null,
+
+  application_id uuid
+    references public.applications(id) on delete cascade,
+
+  discovery_run_id uuid
+    references public.job_discovery_runs(id) on delete cascade,
+
+  job_type text not null
+    check (job_type in (
+      'discover_jobs',
+      'calculate_matches',
+      'submit_application',
+      'send_notification'
+    )),
+
+  status text not null default 'queued'
+    check (status in (
+      'queued',
+      'running',
+      'completed',
+      'failed',
+      'cancelled'
+    )),
+
+  priority smallint not null default 100,
+  attempts integer not null default 0,
+  max_attempts integer not null default 5,
+
+  run_after timestamptz not null default now(),
+  locked_at timestamptz,
+  locked_by text,
+
+  idempotency_key text unique,
+  payload jsonb not null default '{}'::jsonb,
+
+  last_error_code text,
+  last_error_details jsonb,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  check (attempts >= 0),
+  check (max_attempts > 0)
+);
+```
+
+Queue rule: A worker must claim work atomically, ideally using `FOR UPDATE SKIP LOCKED`, and must recheck the candidate's current consent, automation status, eligibility, and quota immediately before any application submission.
+
+
+## 2.10 Subscription, plan, and usage tables
+
+### Table 26 — `subscription_plans`
+
+Plan definitions are controlled by the platform, not individual candidates.
+
+SQL
+
+```
+create table public.subscription_plans (
+  id uuid primary key default gen_random_uuid(),
+
+  plan_key text not null unique,
+  name text not null,
+  description text,
+
+  price_minor bigint not null default 0
+    check (price_minor >= 0),
+  currency char(3) not null default 'INR',
+  billing_interval text not null default 'month'
+    check (billing_interval in ('month', 'year', 'one_time')),
+
+  limits jsonb not null default '{}'::jsonb,
+  features jsonb not null default '{}'::jsonb,
+
+  is_public boolean not null default true,
+  is_active boolean not null default true,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+### Table 27 — `subscriptions`
+
+SQL
+
+```
+create table public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete restrict,
+
+  plan_id uuid not null
+    references public.subscription_plans(id) on delete restrict,
+
+  status public.subscription_status not null default 'incomplete',
+
+  billing_provider text,
+  provider_customer_id text,
+  provider_subscription_id text unique,
+
+  current_period_start timestamptz,
+  current_period_end timestamptz,
+
+  cancel_at_period_end boolean not null default false,
+  cancelled_at timestamptz,
+
+  metadata jsonb not null default '{}'::jsonb,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index subscriptions_one_live_per_user
+on public.subscriptions(user_id)
+where status in ('trialing', 'active', 'past_due', 'incomplete');
+```
+
+### Table 28 — `usage_events`
+
+Append-only usage ledger. Use this to calculate metered consumption and reconcile billing.
+
+SQL
+
+```
+create table public.usage_events (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete restrict,
+
+  subscription_id uuid
+    references public.subscriptions(id) on delete set null,
+
+  event_type public.usage_event_type not null,
+  quantity integer not null default 1
+    check (quantity > 0),
+
+  idempotency_key text not null unique,
+  reference_type text,
+  reference_id uuid,
+
+  occurred_at timestamptz not null default now(),
+  metadata jsonb not null default '{}'::jsonb
+);
+
+comment on table public.usage_events is
+  'Append-only usage ledger; only trusted server-side code may insert events.';
+```
+
+For a real billing integration, add a separate payment/invoice table when the payment provider and checkout flow are selected. Do not treat a browser redirect as proof of payment; verify signed webhooks.
+
+## 2.11 Notifications, source health, audit, and support
+
+### Table 29 — `notifications`
+
+SQL
+
+```
+create table public.notifications (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  category text not null,
+  title text not null,
+  body text not null,
+
+  channel public.notification_channel not null default 'in_app',
+
+  related_job_id uuid
+    references public.jobs(id) on delete set null,
+
+  related_application_id uuid
+    references public.applications(id) on delete set null,
+
+  deduplication_key text,
+
+  read_at timestamptz,
+  dismissed_at timestamptz,
+  delivery_status text not null default 'pending'
+    check (delivery_status in (
+      'pending', 'sent', 'delivered', 'failed'
+    )),
+
+  delivery_error text,
+  sent_at timestamptz,
+
+  created_at timestamptz not null default now()
+);
+
+create unique index notifications_deduplication_idx
+on public.notifications(user_id, deduplication_key)
+where deduplication_key is not null;
+```
+
+### Table 30 — `job_source_health_events`
+
+SQL
+
+```
+create table public.job_source_health_events (
+  id uuid primary key default gen_random_uuid(),
+
+  source_id uuid not null
+    references public.job_sources(id) on delete cascade,
+
+  status public.source_status not null,
+  checked_at timestamptz not null default now(),
+
+  latency_ms integer,
+  jobs_found integer,
+  error_code text,
+  error_details jsonb
+);
+```
+
+### Table 31 — `audit_events`
+
+SQL
+
+```
+create table public.audit_events (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid
+    references public.candidate_profiles(user_id) on delete set null,
+
+  actor_type text not null
+    check (actor_type in ('candidate', 'system', 'admin', 'worker')),
+
+  action text not null,
+  entity_type text,
+  entity_id uuid,
+
+  request_id text,
+  ip_address inet,
+  user_agent text,
+
+  metadata jsonb not null default '{}'::jsonb,
+  occurred_at timestamptz not null default now()
+);
+
+comment on table public.audit_events is
+  'Security and operational audit trail. Restrict access and redact sensitive data.';
+```
+
+### Table 32 — `support_tickets`
+
+SQL
+
+```
+create table public.support_tickets (
+  id uuid primary key default gen_random_uuid(),
+
+  user_id uuid not null
+    references public.candidate_profiles(user_id) on delete cascade,
+
+  ticket_number bigint generated always as identity unique,
+
+  subject text not null,
+  category text not null,
+  description text not null,
+
+  status text not null default 'open'
+    check (status in (
+      'open', 'in_progress', 'waiting_for_user',
+      'resolved', 'closed'
+    )),
+
+  related_application_id uuid
+    references public.applications(id) on delete set null,
+
+  attachment_paths text[] not null default '{}',
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+## 2.12 Final integrity constraints
+
+Add these after all tables exist. They address ownership, uniqueness, and deletion behavior that should be enforced by the database wherever possible.
+
+SQL
+
+```
+-- ------------------------------------------------------------
+-- A. Ensure a resume belongs to the same candidate as its
+--    approved profile snapshot.
+-- ------------------------------------------------------------
+
+alter table public.resume_profile_snapshots
+  add constraint snapshot_resume_owner_fk
+  foreign key (user_id, resume_id)
+  references public.resumes(user_id, id)
+  on delete restrict;
+
+-- ------------------------------------------------------------
+-- B. Ensure a match belongs to the same candidate as its
+--    match run. Use RESTRICT/SET NULL carefully to preserve
+--    history; ownership must still be checked in write logic.
+-- ------------------------------------------------------------
+
+alter table public.job_matches
+  add constraint match_run_owner_fk
+  foreign key (user_id, match_run_id)
+  references public.match_runs(user_id, id)
+  on delete set null;
+
+-- ------------------------------------------------------------
+-- C. Ensure the application resume belongs to its candidate.
+--    This is important because a resume must never be selected
+--    from another user's account.
+-- ------------------------------------------------------------
+
+alter table public.applications
+  add constraint application_resume_owner_fk
+  foreign key (user_id, resume_id)
+  references public.resumes(user_id, id)
+  on delete set null;
+
+-- ------------------------------------------------------------
+-- D. Ensure the referenced match belongs to the candidate.
+-- ------------------------------------------------------------
+
+alter table public.applications
+  add constraint application_match_owner_fk
+  foreign key (user_id, match_id)
+  references public.job_matches(user_id, id)
+  on delete set null;
+
+-- ------------------------------------------------------------
+-- E. Ensure consent and attempts refer to applications owned
+--    by the same candidate.
+-- ------------------------------------------------------------
+
+alter table public.application_consents
+  add constraint consent_application_owner_fk
+  foreign key (user_id, application_id)
+  references public.applications(user_id, id)
+  on delete cascade;
+
+alter table public.application_attempts
+  add constraint attempt_application_owner_fk
+  foreign key (user_id, application_id)
+  references public.applications(user_id, id)
+  on delete cascade;
+
+-- ------------------------------------------------------------
+-- F. Ensure events are associated with the correct application.
+-- ------------------------------------------------------------
+
+alter table public.application_events
+  add constraint event_application_owner_fk
+  foreign key (user_id, application_id)
+  references public.applications(user_id, id)
+  on delete cascade;
+```
+
+Migration correction for `candidate_experiences`: In section 2.5, use a simple nullable `source_resume_id REFERENCES public.resumes(id) ON DELETE SET NULL` and enforce candidate ownership in the trusted write function. Do not execute the earlier composite `candidate_experiences_source_resume_fk` statement as written: its `ON DELETE SET NULL` can conflict with the non-null `user_id`. The remaining composite ownership constraints above are intentional, but test their deletion behavior against your target PostgreSQL version before production migration.
+
+# 3. Index strategy
+
+PostgreSQL automatically creates indexes for primary keys and unique constraints. The following are additional indexes for common filters, joins, sorting, and background workers.
+
+SQL
+
+```
+-- ============================================================
+-- CANDIDATE-OWNED DATA
+-- ============================================================
+
+create index candidate_experiences_user_order_idx
+  on public.candidate_experiences(user_id, display_order);
+
+create index candidate_education_user_idx
+  on public.candidate_education(user_id);
+
+create index candidate_certifications_user_idx
+  on public.candidate_certifications(user_id);
+
+create index resumes_user_created_idx
+  on public.resumes(user_id, created_at desc);
+
+create index resumes_user_status_idx
+  on public.resumes(user_id, status);
+
+create index resume_extractions_user_created_idx
+  on public.resume_extractions(user_id, created_at desc);
+
+create unique index resumes_one_default_per_user_idx
+  on public.resumes(user_id)
+  where is_default = true and status <> 'deleted';
+
+-- ============================================================
+-- JOB DISCOVERY AND SEARCH
+-- ============================================================
+
+create index jobs_status_posted_idx
+  on public.jobs(status, posted_at desc);
+
+create index jobs_location_mode_idx
+  on public.jobs(location, work_mode);
+
+create index jobs_company_idx
+  on public.jobs(company_id);
+
+create index jobs_source_seen_idx
+  on public.jobs(source_id, last_seen_at desc);
+
+create index jobs_content_hash_idx
+  on public.jobs(content_hash);
+
+create index job_skills_skill_idx
+  on public.job_skills(skill_id, job_id);
+
+create index job_discovery_user_created_idx
+  on public.job_discovery_runs(user_id, created_at desc);
+
+create index job_discovery_source_created_idx
+  on public.job_discovery_runs(source_id, created_at desc);
+
+-- Full-text search for title, company, and description.
+create index jobs_search_document_gin_idx
+  on public.jobs using gin(search_document);
+
+-- ============================================================
+-- MATCHES
+-- ============================================================
+
+create index job_matches_user_score_idx
+  on public.job_matches(user_id, overall_score desc, created_at desc);
+
+create index job_matches_user_created_idx
+  on public.job_matches(user_id, created_at desc);
+
+create index job_matches_job_idx
+  on public.job_matches(job_id);
+
+create index job_matches_saved_idx
+  on public.job_matches(user_id, created_at desc)
+  where is_saved = true;
+
+-- ============================================================
+-- APPLICATIONS
+-- ============================================================
+
+create index applications_user_status_updated_idx
+  on public.applications(user_id, status, updated_at desc);
+
+create index applications_user_applied_idx
+  on public.applications(user_id, applied_at desc);
+
+create index applications_follow_up_idx
+  on public.applications(user_id, follow_up_at)
+  where follow_up_at is not null;
+
+create index application_attempts_status_created_idx
+  on public.application_attempts(status, created_at);
+
+create index application_attempts_application_idx
+  on public.application_attempts(application_id, attempt_number desc);
+
+create index application_events_application_time_idx
+  on public.application_events(application_id, occurred_at desc);
+
+create index application_events_user_time_idx
+  on public.application_events(user_id, occurred_at desc);
+
+-- ============================================================
+-- QUEUES
+-- ============================================================
+
+create index automation_jobs_claim_idx
+  on public.automation_jobs(priority, run_after, created_at)
+  where status = 'queued';
+
+create index automation_jobs_stale_lock_idx
+  on public.automation_jobs(locked_at)
+  where status = 'running';
+
+create index automation_jobs_user_created_idx
+  on public.automation_jobs(user_id, created_at desc);
+
+-- ============================================================
+-- BILLING AND USAGE
+-- ============================================================
+
+create index subscriptions_user_status_idx
+  on public.subscriptions(user_id, status);
+
+create index usage_events_user_time_idx
+  on public.usage_events(user_id, occurred_at desc);
+
+create index usage_events_user_type_time_idx
+  on public.usage_events(user_id, event_type, occurred_at desc);
+
+-- ============================================================
+-- NOTIFICATIONS, AUDIT, SUPPORT
+-- ============================================================
+
+create index notifications_user_created_idx
+  on public.notifications(user_id, created_at desc);
+
+create index notifications_user_unread_idx
+  on public.notifications(user_id, created_at desc)
+  where read_at is null and dismissed_at is null;
+
+create index source_health_source_time_idx
+  on public.job_source_health_events(source_id, checked_at desc);
+
+create index audit_events_user_time_idx
+  on public.audit_events(user_id, occurred_at desc);
+
+create index audit_events_entity_idx
+  on public.audit_events(entity_type, entity_id, occurred_at desc);
+
+create index support_tickets_user_created_idx
+  on public.support_tickets(user_id, created_at desc);
+
+create index support_tickets_status_updated_idx
+  on public.support_tickets(status, updated_at desc);
+```
+
+### Why these indexes matter
+
+|
+Index group
+
+|
+
+Performance reason
+
+|
+| --- | --- |
+|
+
+User + timestamp
+
+|
+
+Loads a candidate's latest resumes, matches, applications, and notifications without scanning other users' records.
+
+|
+|
+
+User + status
+
+|
+
+Powers the dashboard's submitted, failed, pending, and action-required counts.
+
+|
+|
+
+Job source + timestamp
+
+|
+
+Supports incremental ingestion and source-health monitoring.
+
+|
+|
+
+Job status + posted date
+
+|
+
+Supports current-job discovery and date sorting.
+
+|
+|
+
+GIN full-text index
+
+|
+
+Enables efficient text search across job descriptions and titles.
+
+|
+|
+
+Partial unread/default/queued indexes
+
+|
+
+Avoids indexing rows that are irrelevant to the common query.
+
+|
+|
+
+Event/application + timestamp
+
+|
+
+Loads application timelines in chronological order.
+
+|
+|
+
+Queue claim index
+
+|
+
+Helps workers find eligible queued tasks without scanning completed work.
+
+|
+|
+
+Usage user + timestamp
+
+|
+
+Supports plan metering and usage-period calculations.
+
+|
+
+Avoid indexing every column. Indexes consume storage and slow writes. Validate these indexes using `EXPLAIN (ANALYZE, BUFFERS)` against realistic data before adding further ones.
+
+
+# 4. Row-Level Security (RLS)
+
+## 4.1 Access-control model
+
+Use three distinct access levels:
+
+Candidate
+
+Can access their own profile, resumes, preferences, matches, applications, notifications, and usage information.
+
+Public / authenticated read
+
+Can read explicitly published plan information and eligible job listings. Never expose private candidate data.
+
+Trusted server / administrator
+
+Manages job ingestion, AI execution, billing webhooks, queue processing, source configuration, and privileged operational records.
+
+Important: RLS is not a replacement for authentication or application-level authorization. Supabase service-role credentials bypass RLS, so they must never be included in browser code.
+
+## 4.2 Enable RLS on private tables
+
+SQL
+
+```
+-- ============================================================
+-- Enable RLS for candidate-owned tables.
+-- ============================================================
+
+alter table public.candidate_profiles enable row level security;
+alter table public.candidate_experiences enable row level security;
+alter table public.candidate_education enable row level security;
+alter table public.candidate_certifications enable row level security;
+alter table public.candidate_skills enable row level security;
+
+alter table public.resumes enable row level security;
+alter table public.resume_extractions enable row level security;
+alter table public.resume_profile_snapshots enable row level security;
+
+alter table public.job_preferences enable row level security;
+alter table public.automation_settings enable row level security;
+alter table public.notification_preferences enable row level security;
+
+alter table public.job_discovery_runs enable row level security;
+alter table public.ai_runs enable row level security;
+alter table public.match_runs enable row level security;
+alter table public.job_matches enable row level security;
+
+alter table public.applications enable row level security;
+alter table public.application_consents enable row level security;
+alter table public.application_attempts enable row level security;
+alter table public.application_events enable row level security;
+alter table public.automation_jobs enable row level security;
+
+alter table public.subscriptions enable row level security;
+alter table public.usage_events enable row level security;
+alter table public.notifications enable row level security;
+alter table public.audit_events enable row level security;
+alter table public.support_tickets enable row level security;
+```
+
+## 4.3 Candidate ownership policies
+
+For candidate-owned tables with a direct `user_id` column:
+
+SQL
+
+```
+-- Example: candidate can read and update their own profile.
+
+create policy "candidate reads own profile"
+on public.candidate_profiles
+for select
+to authenticated
+using (user_id = (select auth.uid()));
+
+create policy "candidate updates own profile"
+on public.candidate_profiles
+for update
+to authenticated
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()));
+
+-- Example: candidate can read their own resumes.
+
+create policy "candidate reads own resumes"
+on public.resumes
+for select
+to authenticated
+using (user_id = (select auth.uid()));
+
+-- Example: candidate can create their own resume records.
+
+create policy "candidate creates own resumes"
+on public.resumes
+for insert
+to authenticated
+with check (user_id = (select auth.uid()));
+
+-- Example: candidate can update their own resume metadata.
+
+create policy "candidate updates own resumes"
+on public.resumes
+for update
+to authenticated
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()));
+
+-- Example: candidate can delete their own resume records.
+
+create policy "candidate deletes own resumes"
+on public.resumes
+for delete
+to authenticated
+using (user_id = (select auth.uid()));
+```
+
+Apply the same ownership pattern to the other private tables, using the appropriate `user_id` column.
+
+### Additional ownership rules
+
+* `candidate_experiences`, `candidate_education`, `candidate_certifications`, `candidate_skills`: verify the authenticated user's ID.
+
+* `resume_extractions`, `resume_profile_snapshots`: verify `user_id`; validate the linked resume belongs to that user.
+
+* `job_preferences`, `automation_settings`, `notification_preferences`: allow only the owner to read or update.
+
+* `job_matches`, `match_runs`, `job_discovery_runs`: allow only the owner to read; initiate privileged processing through server-side functions.
+
+* `applications`, `application_consents`, `application_attempts`, `application_events`: enforce ownership on reads and candidate-initiated changes.
+
+* `notifications`: allow owners to read and mark their own notifications as read.
+
+* `subscriptions`, `usage_events`: candidate read-only; server-side billing and metering writes only.
+
+* `audit_events`: candidate access should be limited to explicitly user-visible events. Keep internal security events private.
+
+* `automation_jobs`: candidates should not directly create or execute privileged automation jobs. Use server-side functions.
+
+For tables with `user_id`, the common ownership condition is:
+
+SQL
+
+```
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()))
+```
+
+Use `USING` for existing rows and `WITH CHECK` for inserted or updated row values. For read-only tables, use a `SELECT` policy only.
+
+## 4.4 Public and shared data policies
+
+|
+Table
+
+|
+
+Access recommendation
+
+|
+| --- | --- |
+|
+
+`subscription_plans`
+
+|
+
+Public read of active, public plans; server-only writes
+
+|
+|
+
+`jobs`
+
+|
+
+Authenticated read of eligible listings; server-only writes
+
+|
+|
+
+`companies`
+
+|
+
+Read-only for authenticated users; server-only writes
+
+|
+|
+
+`skills`
+
+|
+
+Authenticated read; server-only dictionary maintenance
+
+|
+|
+
+`job_skills`
+
+|
+
+Read-only through eligible job listings; server-only writes
+
+|
+|
+
+`job_sources`
+
+|
+
+Expose only safe source-status information; configuration writes restricted
+
+|
+|
+
+`job_source_health_events`
+
+|
+
+Expose sanitized status summaries, not internal diagnostics
+
+|
+|
+
+`subscriptions`
+
+|
+
+Candidate reads own subscription; server-only writes
+
+|
+|
+
+`usage_events`
+
+|
+
+Candidate reads own usage; server-only writes
+
+|
+|
+
+`audit_events`
+
+|
+
+No general public access
+
+|
+|
+
+`automation_jobs`
+
+|
+
+No direct candidate access to queue execution
+
+|
+
+For example, public plan visibility can be implemented as:
+
+SQL
+
+```
+alter table public.subscription_plans
+  enable row level security;
+
+create policy "read published active plans"
+on public.subscription_plans
+for select
+to anon, authenticated
+using (is_public = true and is_active = true);
+```
+
+For `jobs`, create an authenticated `SELECT` policy that exposes only permitted listings, such as jobs whose status is `open` or `unknown`, subject to your product's source and licensing rules. Keep writes restricted to the ingestion service.
+
+Do not create a blanket `FOR ALL` policy for `authenticated`. It can unintentionally grant users the ability to modify shared records or sensitive data.
+
+## 4.5 Supabase Storage policies
+
+Create a private bucket named `candidate-resumes`.
+
+Store objects using a path convention such as:
+
+`{auth.uid()}/{resume_uuid}/{filename}`
+
+Example Storage policies:
+
+SQL
+
+```
+-- Private bucket: candidate-resumes
+-- Folder 1 must match the authenticated user's UUID.
+
+create policy "candidate reads own resume files"
+on storage.objects
+for select
+to authenticated
+using (
+  bucket_id = 'candidate-resumes'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+create policy "candidate uploads own resume files"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'candidate-resumes'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+create policy "candidate deletes own resume files"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'candidate-resumes'
+  and (storage.foldername(name))[1] = (select auth.uid())::text
+);
+```
+
+Generate short-lived signed URLs only after checking resume ownership. Validate file size, MIME type, and actual file content on the server. Storage policies should be tested alongside the database policies.
+
+# 5. Edge Functions and background jobs
+
+The 33 screens require a set of server-side functions. Some should be synchronous request handlers; expensive or retryable tasks should run asynchronously.
+
+## 5.1 Authentication and profile
+
+|
+Function
+
+|
+
+Responsibility
+
+|
+| --- | --- |
+|
+
+`complete-onboarding`
+
+|
+
+Validate onboarding requirements and mark the candidate's setup complete.
+
+|
+|
+
+`update-candidate-profile`
+
+|
+
+Validate and persist candidate profile edits.
+
+|
+|
+
+`request-account-deletion`
+
+|
+
+Initiate account deletion and schedule associated data/file cleanup according to retention rules.
+
+|
+|
+
+`export-candidate-data`
+
+|
+
+Generate an authorized export of the candidate's personal data.
+
+|
+
+Supabase Auth should handle signup, login, email verification, password recovery, and session management. Avoid recreating those flows in custom Edge Functions unless you have a specific requirement.
+
+## 5.2 Resume and AI functions
+
+|
+Function
+
+|
+
+Responsibility
+
+|
+| --- | --- |
+|
+
+`upload-resume`
+
+|
+
+Validate upload metadata and create the resume record.
+
+|
+|
+
+`process-resume`
+
+|
+
+Extract text from PDF/DOCX and enqueue AI extraction.
+
+|
+|
+
+`extract-resume-profile`
+
+|
+
+Call the configured AI model to extract structured candidate data.
+
+|
+|
+
+`review-resume-extraction`
+
+|
+
+Save candidate corrections and the approved profile snapshot.
+
+|
+|
+
+`reprocess-resume`
+
+|
+
+Retry a failed extraction using the configured pipeline.
+
+|
+|
+
+`delete-resume`
+
+|
+
+Validate ownership, handle default-resume changes, and remove the file according to retention rules.
+
+|
+
+Recommended flow: Upload → private Storage → extraction job → AI structured output → candidate review → approved profile snapshot.
+
+## 5.3 Job ingestion and matching
+
+|
+Function
+
+|
+
+Responsibility
+
+|
+| --- | --- |
+|
+
+`discover-jobs`
+
+|
+
+Retrieve jobs from authorized, supported sources.
+
+|
+|
+
+`normalize-job`
+
+|
+
+Convert source-specific fields into the canonical job schema.
+
+|
+|
+
+`deduplicate-job`
+
+|
+
+Detect duplicate listings using source IDs, URLs, and content fingerprints.
+
+|
+|
+
+`refresh-job-status`
+
+|
+
+Update job availability and mark closed or expired listings when supported by source evidence.
+
+|
+|
+
+`calculate-job-matches`
+
+|
+
+Evaluate candidate preferences and profile against eligible jobs.
+
+|
+|
+
+`explain-job-match`
+
+|
+
+Generate structured explanations for matched skills, missing skills, and score components.
+
+|
+|
+
+`refresh-match-analysis`
+
+|
+
+Recalculate stale analysis using the current profile and algorithm version.
+
+|
+|
+
+`get-dashboard-summary`
+
+|
+
+Return efficient aggregate counts and actionable lists for the dashboard.
+
+|
+
+Matching should use deterministic eligibility rules before AI scoring. AI should explain relevance, not override hard constraints such as required experience, location restrictions, or candidate-selected exclusions without an explicit product rule.
+
+## 5.4 Application and automation functions
+
+|
+Function
+
+|
+
+Responsibility
+
+|
+| --- | --- |
+|
+
+`prepare-application`
+
+|
+
+Create or retrieve the candidate-job application and validate required data.
+
+|
+|
+
+`confirm-application`
+
+|
+
+Record explicit candidate confirmation and enqueue an eligible submission.
+
+|
+|
+
+`execute-application`
+
+|
+
+Perform a permitted application action through a supported integration.
+
+|
+|
+
+`check-application-status`
+
+|
+
+Refresh the status using available source or provider evidence.
+
+|
+|
+
+`retry-application`
+
+|
+
+Retry a failed attempt only after checking idempotency and whether the previous outcome is known.
+
+|
+|
+
+`pause-automation`
+
+|
+
+Disable future eligible automation work for a candidate.
+
+|
+|
+
+`resume-automation`
+
+|
+
+Re-enable automation after checking consent, eligibility, and limits.
+
+|
+|
+
+`process-automation-queue`
+
+|
+
+Claim and execute eligible queued tasks with bounded retries.
+
+|
+|
+
+`record-application-event`
+
+|
+
+Append a status change or execution event to the application timeline.
+
+|
+|
+
+`update-manual-application`
+
+|
+
+Record a candidate-reported application outcome.
+
+|
+
+Application execution must not bypass a site's access restrictions, CAPTCHA, or other anti-bot controls. Where automated submission is unsupported, route the candidate to the manual application flow.
+
+## 5.5 Billing, notifications, and operations
+
+|
+Function
+
+|
+
+Responsibility
+
+|
+| --- | --- |
+|
+
+`billing-webhook`
+
+|
+
+Verify the payment provider's webhook signature and update subscription state idempotently.
+
+|
+|
+
+`record-usage`
+
+|
+
+Record a metered event once using an idempotency key.
+
+|
+|
+
+`enforce-usage-limits`
+
+|
+
+Validate quotas before paid or limited operations.
+
+|
+|
+
+`send-notification`
+
+|
+
+Deliver an eligible email or in-app notification.
+
+|
+|
+
+`process-notification-digest`
+
+|
+
+Build and send scheduled notification digests.
+
+|
+|
+
+`check-job-source-health`
+
+|
+
+Check configured source availability and record health events.
+
+|
+|
+
+`expire-stale-jobs`
+
+|
+
+Mark listings expired according to source evidence and configured rules.
+
+|
+|
+
+`cleanup-expired-files`
+
+|
+
+Remove eligible temporary files and expired objects under retention policy.
+
+|
+|
+
+`reconcile-subscriptions`
+
+|
+
+Reconcile local subscription records against the billing provider.
+
+|
+
+### Scheduling recommendations
+
+* Job discovery: schedule according to source limits and the candidate's preferences.
+
+* Match calculation: run after relevant job/profile changes, with deduplication.
+
+* Application processing: use a worker queue with retries and dead-letter handling.
+
+* Source health: periodically check enabled sources.
+
+* Notification digests: schedule according to each candidate's timezone.
+
+* Subscription reconciliation: run periodically and after relevant provider events.
+
+Use a managed queue or durable worker architecture for critical jobs. A simple PostgreSQL queue is adequate for an initial low-volume MVP, provided claims are atomic, retries are bounded, and duplicate work is safe.
+
+# 6. Important production decisions
+
+## A. What should not be stored in the database?
+
+* Plaintext passwords.
+
+* Supabase service-role keys.
+
+* OAuth access or refresh tokens in unencrypted columns.
+
+* Full resume files as database blobs.
+
+* Unnecessary personal data copied from job-source payloads.
+
+* Unredacted secrets or credentials in AI prompts and logs.
+
+* Permanent public resume URLs.
+
+For third-party credentials, use a secrets manager. If user-specific tokens become necessary, encrypt them using a managed key and strictly restrict access.
+
+## B. How to keep the database efficient
+
+* Keep canonical jobs separate from candidate matches.
+
+* Avoid duplicating the full job description in each match.
+
+* Use JSONB for variable AI payloads, not every relational field.
+
+* Keep application events append-only.
+
+* Use a separate queue for expensive processing.
+
+* Use database views or carefully designed RPC functions for dashboard aggregates.
+
+* Paginate job listings, application records, and activity logs.
+
+* Add partitioning for high-volume event tables only after measuring actual table growth.
+
+* Avoid storing every raw provider response indefinitely.
+
+* Apply retention policies to temporary AI payloads and operational logs.
+
+## C. Suggested MVP versus later
+
+|
+Capability
+
+|
+
+MVP approach
+
+|
+
+Later optimization
+
+|
+| --- | --- | --- |
+|
+
+Database
+
+|
+
+Supabase PostgreSQL
+
+|
+
+Read replicas if needed
+
+|
+|
+
+Authentication
+
+|
+
+Supabase Auth
+
+|
+
+Enterprise SSO if required
+
+|
+|
+
+Resume files
+
+|
+
+Supabase Storage
+
+|
+
+Dedicated object storage/CDN
+
+|
+|
+
+Job search
+
+|
+
+PostgreSQL full-text search
+
+|
+
+Dedicated search service if justified
+
+|
+|
+
+AI matching
+
+|
+
+PostgreSQL + background worker
+
+|
+
+Vector/hybrid search if evaluation proves value
+
+|
+|
+
+Queue
+
+|
+
+PostgreSQL-backed queue
+
+|
+
+Dedicated managed queue at higher volume
+
+|
+|
+
+Billing
+
+|
+
+Subscription + usage tables
+
+|
+
+More advanced invoicing and metering
+
+|
+|
+
+Analytics
+
+|
+
+SQL aggregates
+
+|
+
+Warehouse/BI pipeline at scale
+
+|
+
+For the initial MVP, do not add a separate vector database, Elasticsearch, or a second operational database by default. Start with PostgreSQL's relational, JSONB, and full-text capabilities. Introduce additional infrastructure only when measured latency, recall, or throughput requires it.
+
+# 7. Final implementation checklist
+
+### Database readiness checklist
+
+0 of 8
+
+Auth and ownership
+
+Supabase Auth is the only identity source; all private tables enforce ownership.
+
+Migrations
+
+All enums, tables, constraints, indexes, and triggers are version-controlled.
+
+Resume security
+
+Private bucket, owner-scoped paths, signed URLs, file validation.
+
+Matching integrity
+
+Score versions, profile snapshots, and job references are preserved.
+
+Application safety
+
+Consent, idempotency, quotas, attempts, and event history are enforced.
+
+Billing integrity
+
+Signed webhooks, idempotent usage, and server-side entitlement checks.
+
+RLS testing
+
+Cross-user reads, inserts, updates, deletes, and Storage access are tested.
+
+Operations
+
+Queue retries, stale-lock recovery, logs, monitoring, and retention are configured.
+
+## My final recommendation
+
+Use Supabase PostgreSQL + Supabase Auth + private Supabase Storage as the foundation for your AI job-search MVP. It gives you a relational data model, strong ownership controls, transactional application tracking, and room to evolve without introducing unnecessary infrastructure.
+
+Before handing the SQL to Codex, resolve the noted composite foreign-key deletion behavior and generate migrations in dependency order. Then have Codex implement the schema, RLS policies, typed database access layer, and automated cross-user security tests together—not as separate tasks.
+
+The most important production safeguard is that the browser must never be trusted to authorize an application submission, change subscription entitlements, or bypass candidate ownership. Those decisions belong in trusted server-side code, backed by database constraints and an auditable event history.

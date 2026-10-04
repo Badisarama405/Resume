@@ -1,0 +1,697 @@
+# Section 1 : Pre-auth flow
+
+### 1. Landing Page
+
+**Goal:** Get the user to upload a resume and see value before creating an account.
+
+**What user sees:**
+
+* Headline: **“Find Jobs That Actually Match Your Skills.”**
+* 3-step visual:
+
+  1. Upload Resume
+  2. Discover Matching Jobs
+  3. Apply / Get Notified
+* Sample job card showing:
+
+  * Job title
+  * Company
+  * Match Score: 87%
+  * Matched Skills
+  * Missing Skills
+* Supported job-source categories
+* Free vs Pro summary
+* Privacy/security note
+* Primary CTA: **Upload Resume & Find Jobs**
+* Secondary CTA: **Sign In**
+
+**Click path:**
+`Upload Resume → Signup → Resume Processing → Onboarding`
+
+Do not make the landing page a long marketing page. The product's value is demonstrated through the matching experience.
+
+---
+
+### 2. Signup
+
+**Fields:**
+
+* Full Name
+* Email
+* Password
+* Optional: Google Sign-in
+
+**Friction reducers:**
+
+* Resume can be uploaded immediately during signup.
+* Do not ask for phone number unless required later.
+* Password requirements shown inline.
+* Email verification can happen after the first value-producing action.
+* Show: **“Free plan — no credit card required.”**
+
+**Primary CTA:** `Create My Job Search`
+
+---
+
+### 3. Login
+
+**Fields:**
+
+* Email
+* Password
+* Remember me
+
+**Actions:**
+
+* `Login`
+* `Continue with Google`
+* `Forgot Password`
+* `Create Account`
+
+**Forgot Password:**
+`Email → Reset link → New password → Automatically return to Login`
+
+Do not expose whether an email address exists in the system.
+
+---
+
+# Section 2 : First-time Onboarding
+
+## 4. Welcome Screen
+
+After signup:
+
+**“Let's build your job-search profile.”**
+
+Show 3 steps:
+
+`Resume → Preferences → First Job Matches`
+
+Progress indicator: `Step 1 of 3`
+
+CTA: **Upload Resume**
+
+---
+
+## 5. Resume Upload
+
+**Accept:**
+
+* PDF
+* DOCX
+
+**User sees:**
+
+* Drag & drop
+* Browse files
+* Maximum file size
+* Privacy statement
+
+After upload:
+
+`Uploading → Parsing → Extracting Profile → Profile Ready`
+
+AI extracts:
+
+* Name
+* Current/previous roles
+* Total experience
+* Skills
+* Tools/technologies
+* Education
+* Certifications
+* Companies
+* Locations
+* Resume keywords
+
+---
+
+## 6. AI Profile Review
+
+This is an important trust screen.
+
+Display extracted information in editable sections:
+
+### Professional Summary
+
+`Software Engineer | 3 years`
+
+### Skills
+
+`Python` `Selenium` `Playwright` `SQL` ...
+
+### Experience
+
+`3 years`
+
+### Education
+
+`B.Tech — Computer Science`
+
+### Preferred Locations
+
+Initially suggested from resume, but user confirms.
+
+Every extracted field should have:
+
+`Edit`
+
+CTA:
+
+**Confirm My Profile**
+
+Do not silently trust AI extraction.
+
+---
+
+## 7. Job Preferences
+
+Collect only information that affects matching.
+
+### Required
+
+* Target Job Titles
+* Preferred Locations
+* Experience Level
+* Work Mode:
+
+  * Remote
+  * Hybrid
+  * On-site
+* Preferred employment type
+
+### Optional
+
+* Minimum salary
+* Preferred industries
+* Companies to avoid
+* Notice period
+
+**Default sensible values from resume wherever possible.**
+
+CTA:
+
+**Find My Jobs**
+
+---
+
+## 8. Application Preferences
+
+Collect automation rules.
+
+### Auto-Application Threshold
+
+Default:
+
+**75%**
+
+User can change it.
+
+Example:
+
+`Apply automatically when match score ≥ 75%`
+
+### Application Mode
+
+* `Automatic`
+* `Ask Me Before Applying`
+* `Manual Only`
+
+### Notification Preference
+
+* Email
+* Daily digest
+* Immediate alerts
+
+CTA:
+
+**Start Job Search**
+
+---
+
+## 9. THE FIRST 60-SECOND AHA MOMENT
+
+Do **not** send the user to an empty dashboard.
+
+Immediately run:
+
+`Candidate Profile → Job Discovery → JD Extraction → Matching → Score`
+
+Then show the first 5–10 jobs.
+
+Example:
+
+> **You have 8 strong matches.**
+
+Job card:
+
+**Senior Python Automation Engineer**
+Company XYZ
+Hyderabad
+**89% Match**
+
+**Why you match**
+
+* Python ✓
+* Selenium ✓
+* API Testing ✓
+* 3+ years experience ✓
+
+**Missing**
+
+* Playwright
+
+Actions:
+
+`View Match` | `Apply`
+
+This is the core aha moment:
+
+**“The system understands my resume and has already found jobs relevant to me.”**
+
+---
+
+# Section 3 : CORE Daily Loop
+
+The daily product loop should be:
+
+### Step 1 — Discover
+
+System continuously/periodically collects jobs from supported sources.
+
+Pipeline:
+
+`Job Sources → Job Normalization → Duplicate Detection → JD Extraction`
+
+User sees:
+
+**“47 new jobs found today.”**
+
+---
+
+### Step 2 — Match
+
+AI compares:
+
+`Candidate Profile ↔ Job Description`
+
+Scoring dimensions:
+
+* Required skills
+* Preferred skills
+* Experience
+* Job title
+* Location
+* Education/certifications where relevant
+
+Output:
+
+**ATS Match Score: 82/100**
+
+---
+
+### Step 3 — Review
+
+Dashboard sorts jobs into:
+
+**Strong Match**
+`75–100`
+
+**Potential Match**
+`50–74`
+
+**Low Match**
+`0–49`
+
+Each job should show *why* it received its score.
+
+Never make the score a mysterious AI number.
+
+---
+
+### Step 4 — Apply
+
+Three paths:
+
+#### A. Supported automatic application
+
+`Score ≥ threshold → Application workflow → Submit → Confirmation`
+
+Status:
+
+**Applied**
+
+#### B. Automation unavailable
+
+`Score ≥ threshold → Email notification → User opens application`
+
+Status:
+
+**Action Required**
+
+#### C. User chooses manually
+
+User can click:
+
+**Apply Now**
+
+The system records the application afterward.
+
+---
+
+### Step 5 — Track
+
+Application lifecycle:
+
+`Discovered → Matched → Eligible → Applied → Interview → Offer / Rejected`
+
+For MVP, the minimum statuses should be:
+
+* Discovered
+* Saved
+* Action Required
+* Applied
+* Failed
+
+The dashboard becomes the user's daily job-search control center.
+
+---
+
+## Where AI Shows Its Magic
+
+AI should be visible in **three places**, not everywhere.
+
+### 1. Resume Intelligence
+
+Turns an unstructured resume into a structured candidate profile.
+
+### 2. Explainable Matching
+
+Shows:
+
+**82% Match**
+
+`+ Skills: 8/10`
+`+ Experience: Strong`
+`+ Location: Match`
+`− Missing: AWS`
+
+### 3. Application Decision
+
+AI determines:
+
+`Score ≥ configured threshold → Eligible for automation`
+
+But the system should retain deterministic rules around eligibility, consent, duplicate applications, and application limits.
+
+---
+
+## Where the User Might Quit
+
+### Problem 1: Too much onboarding
+
+**Prevention:** Extract most information from the resume and ask only for confirmation.
+
+---
+
+### Problem 2: No relevant jobs
+
+**Prevention:**
+
+* Show why there are no matches.
+* Suggest expanding location/title preferences.
+* Allow broader matching.
+
+Example:
+
+> “We found 3 matches. Expanding your search to Bangalore and Hyderabad could add 18 more.”
+
+---
+
+### Problem 3: Low trust in ATS score
+
+**Prevention:**
+
+Never display only:
+
+`87% Match`
+
+Display:
+
+`87% Match`
+
+**Matched:** 12 skills
+**Missing:** 2 skills
+**Experience:** Strong
+**Location:** Match
+
+---
+
+### Problem 4: Automation fails
+
+**Prevention:**
+
+Never make the user feel the application disappeared.
+
+Show:
+
+> **Automatic application unavailable**
+
+Then:
+
+`Open Application →`
+
+and email the same job.
+
+---
+
+### Problem 5: Too many notifications
+
+**Prevention:**
+
+Allow:
+
+`Instant | Daily Digest | Important Only`
+
+Default to **Daily Digest** for Free users.
+
+---
+
+# Section 4 : Upgrade Moments
+
+## Upgrade Moment 1 — Job Match Limit
+
+User reaches the Free limit.
+
+Show:
+
+> **You've used today's 10 free job matches.**
+
+Show what Pro unlocks:
+
+* Up to 100 matches/day
+* Detailed matching
+* More job alerts
+* Extended history
+
+CTA:
+
+**Upgrade — ₹499/month**
+
+Do not interrupt while the user is viewing an already-discovered job.
+
+---
+
+## Upgrade Moment 2 — Automatic Application Limit
+
+User reaches the Free allowance.
+
+Show:
+
+> **You've used 5 automatic applications this month.**
+
+Then:
+
+**Continue manually**
+or
+**Upgrade to Pro**
+
+This is a strong upgrade moment because the user has already experienced the automation.
+
+---
+
+## Upgrade Moment 3 — High-Value Job Detected
+
+User has a strong match but the Free plan cannot automatically process it.
+
+Example:
+
+> **92% Match — Application Ready**
+
+> This application requires automation available on Pro.
+
+Actions:
+
+`Apply Manually`
+`Upgrade & Automate`
+
+The user should always retain a manual path.
+
+---
+
+# Section 5 : Complete Screen List
+
+## Pre-auth
+
+**1. Landing Page**
+Value proposition + sample match + CTA.
+
+**2. Signup**
+Account creation.
+
+**3. Email Verification**
+Verify account when required.
+
+**4. Login**
+Existing-user authentication.
+
+**5. Forgot Password**
+Password recovery.
+
+**6. Reset Password**
+Create new password.
+
+---
+
+## Onboarding
+
+**7. Welcome / Setup Progress**
+3-step onboarding.
+
+**8. Resume Upload**
+PDF/DOCX upload.
+
+**9. Resume Processing**
+AI extraction state.
+
+**10. AI Profile Review**
+Review/edit extracted candidate data.
+
+**11. Job Preferences**
+Titles, locations, experience, work mode.
+
+**12. Application Preferences**
+Threshold, automation mode, notifications.
+
+**13. First Match Results**
+The first aha moment.
+
+---
+
+## Core Product
+
+**14. Dashboard / Job Command Center**
+Daily overview:
+
+* New jobs
+* Strong matches
+* Applications
+* Action required
+* Failures
+
+**15. Job Matches**
+Filterable job list.
+
+Filters:
+
+* Match score
+* Location
+* Experience
+* Remote/hybrid
+* Date discovered
+* Application status
+
+**16. Job Detail**
+Complete JD + company + application URL + match score.
+
+**17. Match Analysis**
+Detailed:
+
+* Matched skills
+* Missing skills
+* Experience comparison
+* Score breakdown
+
+**18. Application Confirmation**
+Shown before eligible automated applications where confirmation is required.
+
+**19. Application Status**
+Success/failure/action-required result.
+
+**20. Manual Application**
+Application link + instructions + mark-as-applied.
+
+**21. Application Tracker**
+All applications and statuses.
+
+**22. Application Detail**
+Individual application history and events.
+
+---
+
+## Profile & Settings
+
+**23. Candidate Profile**
+Resume-derived professional profile.
+
+**24. Resume Manager**
+Upload/manage up to allowed resume profiles.
+
+**25. Job Preferences**
+Modify search criteria.
+
+**26. Automation Settings**
+Threshold + application mode + limits.
+
+**27. Notification Settings**
+Email/digest/alert preferences.
+
+**28. Subscription & Usage**
+Plan, usage, limits, upgrade.
+
+**29. Account Settings**
+Name, email, password, account management.
+
+---
+
+## Power-User / System Screens
+
+**30. Job Source Status**
+Shows which supported sources are currently active/available.
+
+**31. Application Activity Log**
+Timestamped system actions.
+
+**32. Notifications Center**
+Application and job alerts.
+
+**33. Help / Support**
+FAQs + support contact.
+
+---
+
+### Core Navigation
+
+The product should ultimately reduce to **five primary destinations**:
+
+**Dashboard | Jobs | Applications | Profile | Settings**
+
+Everything else should be accessed contextually from these five areas.
+
+### Critical MVP principle
+
+The central loop is:
+
+**Resume → Profile → Jobs → Match Score → Apply → Track**
+
+If a screen does not improve one of those six steps, it should not be in the MVP.
